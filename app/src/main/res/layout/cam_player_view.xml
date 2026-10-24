@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  记录仪多视角格子用的播放器视图。
+  surface_type 必须是 texture_view：media3 默认的 surface_view 在 Compose 的 AndroidView 里
+  是"往窗口挖洞"显示的，会被父级 .background(黑) 和滚动容器挡住，表现为画面全黑但播放器在跑。
+  media3 1.4.1 也没有公开的 setSurfaceType，只能靠这个属性。
+-->
+<androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    app:resize_mode="fit"
+    app:surface_type="texture_view"
+    app:use_controller="false" />

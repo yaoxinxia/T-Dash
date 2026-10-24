@@ -1,0 +1,33 @@
+# ---- Gradle / build ----
+.gradle/
+build/
+app/build/
+.kotlin/
+!gradle/wrapper/gradle-wrapper.jar
+
+# ---- IDE ----
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# ---- Local machine config ----
+local.properties
+captures/
+
+# ---- Secrets / signing ----
+*.jks
+*.keystore
+keystore.properties
+
+# ---- Logs ----
+*.log
+
+# ---- Project-local material (not part of the app) ----
+# 参考实现克隆（第三方代码，各自仓库自含许可证）
+reference/
+# 本地实验脚本与临时产物
+scratch/
+_patch_stages*.py
+# 图标等历史备份
+backup/

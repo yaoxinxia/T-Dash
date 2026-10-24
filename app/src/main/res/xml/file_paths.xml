@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 取证拍照的中转文件根：相机把照片写到这里（FileProvider 授权），app 再收进相册。
+     MediaStore 的 IS_PENDING 条目很多国产相机不肯写，所以不用那条路。 -->
+<paths>
+    <cache-path
+        name="shots"
+        path="shots/" />
+    <cache-path
+        name="exports"
+        path="exports/" />
+</paths>

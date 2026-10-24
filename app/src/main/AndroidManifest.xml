@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      BLE-first app. INTERNET exists ONLY for map tiles under the 轨迹 chart
+      (CARTO/OSM raster tiles, HTTPS, disk-cached by osmdroid); nothing else
+      in the app touches the network, and the vehicle link stays BLE-only.
+      NOTE: BLUETOOTH_SCAN deliberately does NOT declare neverForLocation.
+      With that flag, some OEM stacks (e.g. OriginOS) deliver a restricted
+      result set that can omit the vehicle's advertisement entirely; matching
+      nRF Connect's permission posture (scan + location) gives full results.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Android 11 and below have no BLUETOOTH_SCAN/CONNECT: they need the legacy pair,
+         otherwise startScan throws SecurityException on those devices (minSdk is 29). -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!--
+      Android 11+ 包可见性：不声明就查不到、也拉不起高德地图（getLaunchIntentForPackage 会返回 null）。
+      第二个 intent 给「打开系统相机取证」用。
+    -->
+    <queries>
+        <package android:name="com.autonavi.minimap" />
+        <package android:name="com.autonavi.minimap.widget" />
+        <package android:name="com.eg.android.AlipayGphone" />
+        <package android:name="com.tencent.mm" />
+        <package android:name="com.sankuai.meituan" />
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="androidamap" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".App"
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.TeslaLink"
+        android:usesCleartextTraffic="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboardHidden|uiMode|locale|layoutDirection"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 取证拍照的中转：相机写这里，app 再收进相册（MediaStore pending 条目国产相机常拒写） -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>

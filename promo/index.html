@@ -1,0 +1,2675 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>T-Dash · 手机，就是你的仪表盘</title>
+<meta name="description" content="T-Dash：纯蓝牙直连 Tesla 的安卓伴侣。控制、状态、轨迹、仪表全部在本机完成，没有账号，没有云。">
+<style>
+/* ============ tokens（与 app 的 TL 主题同源） ============ */
+:root{
+  --ink:#080A0D; --base:#0E1116; --surface:#141920; --raised:#1B222A; --sunken:#0B0E12;
+  --hairline:#232C36; --hairline-soft:#1A2129;
+  --hi:#E8EEF5; --mid:#9BAABA; --low:#647382;
+  --accent:#4C8DFF; --accent-soft:#16233A;
+  --good:#3BC46B; --warn:#FFB020; --bad:#F04A50; --data:#35C6E0;
+  --c0:#38BDF8; --c1:#E8EAED; --c2:#FFB300; --c3:#FF7043; --c4:#FF5252;
+  --font:"Inter","SF Pro Display","PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  --r:20px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--ink);color:var(--hi);font-family:var(--font);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden;
+  font-variant-numeric:tabular-nums;
+}
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(70% 45% at 72% -6%,rgba(76,141,255,.16),transparent 60%),
+    radial-gradient(45% 30% at 8% 18%,rgba(53,198,224,.08),transparent 65%),
+    radial-gradient(60% 50% at 50% 110%,rgba(11,16,22,.9),transparent 70%),
+    var(--ink);
+}
+::selection{background:rgba(76,141,255,.32);color:#fff}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+.eyebrow{
+  display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--low);
+}
+h1,h2,h3,h4,p{margin:0}
+.grad{
+  background:linear-gradient(96deg,#DCEBFF 4%,#7FB6FF 42%,#35C6E0 96%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+
+/* ============ 顶栏 ============ */
+.progress{position:fixed;left:0;top:0;height:2px;width:0;z-index:100;background:linear-gradient(90deg,var(--accent),var(--data));box-shadow:0 0 12px rgba(53,198,224,.7)}
+header{
+  position:sticky;top:0;z-index:60;background:rgba(8,10,13,.72);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--hairline-soft);
+}
+.nav{height:64px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:.01em}
+.mark{
+  width:28px;height:28px;border-radius:9px;overflow:hidden;flex:none;
+  box-shadow:0 6px 18px rgba(53,198,224,.24),0 2px 8px rgba(0,0,0,.45);
+}
+.mark svg{width:100%;height:100%;display:block}
+.brand small{color:var(--low);font-size:10.5px;font-weight:500;letter-spacing:.08em;margin-left:2px}
+.nav-links{display:flex;align-items:center;gap:26px;font-size:13px;color:var(--mid)}
+.nav-links a{transition:color .2s}
+.nav-links a:hover{color:var(--hi)}
+.nav-ver{
+  font-size:10.5px;letter-spacing:.06em;color:var(--mid);border:1px solid var(--hairline);
+  background:rgba(20,25,32,.7);padding:5px 10px;border-radius:999px;
+}
+
+/* ============ hero ============ */
+.hero{padding:54px 0 44px;display:grid;grid-template-columns:1.02fr 1.16fr;gap:52px;align-items:center}
+.hero-copy h1{font-size:clamp(40px,4.6vw,62px);line-height:1.06;letter-spacing:-.035em;font-weight:700}
+.hero-copy h1 span{display:block;margin-top:6px}
+.hero-copy .lead{margin-top:22px;font-size:15.5px;line-height:1.72;color:var(--mid);max-width:470px}
+.hero-copy .lead b{color:var(--hi);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;
+  border:1px solid var(--hairline);background:rgba(20,25,32,.72);
+  font-size:11.5px;letter-spacing:.02em;color:#C6D3E1;
+}
+.chip i{width:6px;height:6px;border-radius:50%;background:var(--good);box-shadow:0 0 10px var(--good)}
+.chip.blue i{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.chip.cyan i{background:var(--data);box-shadow:0 0 10px var(--data)}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;padding:12px 18px;border-radius:12px;
+  font-size:13.5px;font-weight:600;letter-spacing:.01em;border:1px solid transparent;
+  transition:transform .18s,background .2s,border-color .2s;cursor:pointer;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{background:linear-gradient(180deg,#5B98FF,#3F7BEA);color:#061021;box-shadow:0 10px 30px -12px rgba(76,141,255,.9)}
+.btn-ghost{background:rgba(20,25,32,.72);border-color:var(--hairline);color:var(--hi)}
+.btn-ghost:hover{border-color:#33414F;background:var(--raised)}
+.hero-note{margin-top:18px;font-size:11px;color:var(--low);letter-spacing:.02em;line-height:1.6}
+
+/* ============ 手机壳 ============ */
+.pwrap{--ps:1;height:calc(798px * var(--ps));display:flex;justify-content:center;align-items:flex-start}
+.hero-pwrap{filter:drop-shadow(0 50px 90px rgba(0,0,0,.65))}
+.phone{
+  width:384px;height:798px;flex:none;padding:9px;border-radius:52px;position:relative;
+  transform:scale(var(--ps));transform-origin:top center;
+  background:linear-gradient(150deg,#3A444F 0%,#10151B 26%,#090C10 68%,#2C3540 100%);
+  box-shadow:0 60px 120px -50px #000,inset 0 0 0 1px #46525F,inset 0 0 0 3px #0A0E12;
+}
+.phone::before,.phone::after{content:"";position:absolute;width:2px;border-radius:2px;background:#2B3540}
+.phone::before{left:-2px;top:154px;height:58px}
+.phone::after{right:-2px;top:196px;height:86px}
+.screen{
+  width:366px;height:780px;border-radius:43px;overflow:hidden;background:var(--ink);
+  display:flex;flex-direction:column;position:relative;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);
+}
+.sysbar{
+  height:28px;flex:none;display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;font-size:9.5px;color:#B9C6D4;letter-spacing:.02em;position:relative;z-index:5;
+  background:#080A0D;
+}
+.sysbar .punch{position:absolute;left:50%;top:7px;width:10px;height:10px;border-radius:50%;background:#040608;transform:translateX(-50%);box-shadow:0 0 0 1px #1A2028}
+.sysbar .right{display:flex;align-items:center;gap:6px}
+.sysbar .right b{font-weight:600;color:#DCE5EF;font-size:9px}
+.app-area{flex:1;min-height:0;position:relative;overflow:hidden;background:var(--ink)}
+.tabbar{
+  height:60px;flex:none;display:flex;border-top:1px solid var(--hairline);
+  background:rgba(14,17,22,.97);position:relative;z-index:6;
+}
+.tab{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  border:0;background:none;padding:0;color:var(--low);font-size:10px;letter-spacing:.6px;font-weight:400;
+  position:relative;cursor:pointer;
+}
+.tab::before{content:"";width:16px;height:2px;border-radius:2px;background:transparent;flex:none}
+.tab svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.9}
+.tab.on{color:var(--hi)}
+.tab.on svg{color:var(--accent);opacity:1}
+.tab.on::before{background:var(--accent);box-shadow:0 0 8px rgba(76,141,255,.8)}
+.hero-tabs .tab{cursor:default}
+.gesturebar{height:16px;flex:none;display:grid;place-items:center;background:var(--ink)}
+.gesturebar i{width:112px;height:4px;border-radius:2px;background:#2B3540}
+
+/* ============ 页面通用（按 0.89 缩放复刻 Compose 尺寸） ============ */
+.page{
+  position:absolute;inset:0;display:none;flex-direction:column;gap:12px;
+  padding:16px 16px 20px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+.page::-webkit-scrollbar{display:none}
+.page>*{flex:none}
+.page.active{display:flex;animation:pageIn .16s ease}
+@keyframes pageIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.page.cluster{padding:0;overflow:hidden}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:0}
+.ph>div:first-child{flex:1;min-width:0}
+.ph h3{font-size:22px;font-weight:600;letter-spacing:0;line-height:1.3}
+.ph .sub{font-size:11.5px;line-height:1.5;color:var(--low);margin-top:3px}
+.pill{
+  --cr:76,141,255;display:inline-flex;align-items:center;gap:4px;flex:none;
+  padding:5px 10px;border-radius:999px;border:1px solid rgba(var(--cr),.28);
+  background:rgba(var(--cr),.10);font-size:11px;line-height:1;font-weight:500;color:rgb(var(--cr));white-space:nowrap;
+}
+.pill b{font-weight:500}
+.pill.on{background:var(--accent-soft);border-color:rgba(76,141,255,.55);color:var(--accent)}
+button.pill{font-family:inherit;cursor:pointer;align-self:flex-start}
+.trip-head .pill{align-self:center}
+.t-good{--cr:59,196,107}.t-warn{--cr:255,176,32}.t-bad{--cr:240,74,80}
+.t-info{--cr:76,141,255}.t-data{--cr:53,198,224}.t-mid{--cr:155,170,186}.t-low{--cr:100,115,130}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pills.scroll{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px;padding:1px 16px 2px;scrollbar-width:none}
+.pills.scroll::-webkit-scrollbar{display:none}
+.pills.nowrap{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.pills.nowrap::-webkit-scrollbar{display:none}
+.pills.nowrap>*{flex:none}
+.hint{
+  --cr:76,141,255;display:flex;gap:9px;align-items:flex-start;
+  padding:9px 12px;border-radius:14px;border:1px solid rgba(var(--cr),.28);background:rgba(var(--cr),.10);
+  font-size:11.5px;line-height:1.5;font-weight:400;color:rgba(232,238,245,.88);
+}
+.hint::before{content:"";width:6px;height:6px;border-radius:50%;background:rgb(var(--cr));margin-top:5px;flex:none}
+.hint.t-good{--cr:59,196,107}.hint.t-warn{--cr:255,176,32}.hint.t-low{--cr:100,115,130}
+.slabel{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--low);padding:6px 4px 2px}
+.slabel small{flex:1 1 0;min-width:0;text-align:right;font-size:10.5px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--low)}
+
+/* 折叠分区 */
+.coll{display:flex;flex-direction:column;gap:0}
+.coll-h{
+  width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:10px 12px;border:1px solid var(--hairline);border-radius:10px;background:var(--raised);
+  color:inherit;text-align:left;cursor:pointer;
+}
+.coll-h b{font-size:14px;font-weight:500;display:block;color:var(--hi);line-height:1.5}
+.coll-h span{display:block;font-size:11px;font-weight:500;color:var(--mid);line-height:1.33}
+.coll-h i{font-style:normal;color:var(--mid);font-size:16px;flex:none}
+.coll-b{display:none;flex-direction:column;gap:8px;padding:8px 0 0}
+.coll.open .coll-b{display:flex}
+.coll.open .coll-h{border-color:#2B3745}
+
+/* ActionTile */
+.tile{
+  display:flex;align-items:center;gap:10px;width:100%;min-height:58px;
+  padding:10px 13px;border:1px solid rgba(76,141,255,.35);border-radius:14px;background:var(--raised);
+  color:inherit;font-family:inherit;text-align:left;cursor:pointer;
+  transition:transform .12s,border-color .2s,background .2s;
+}
+.tile:active{transform:scale(.985)}
+.tile .tx{flex:1;min-width:0}
+.tile b{display:block;font-size:14px;font-weight:500;line-height:1.5;color:var(--hi)}
+.tile em{display:block;font-style:normal;font-size:10.5px;font-weight:500;line-height:1.45;color:rgba(76,141,255,.9);margin-top:2px}
+.tile em:empty{display:none}
+.tile .dot{width:7px;height:7px;border-radius:50%;background:var(--tone,var(--accent));flex:none}
+.tile .badge{font-size:10.5px;letter-spacing:.8px;color:var(--low);flex:none}
+.tile.dis{background:var(--raised);border-color:var(--hairline-soft);cursor:not-allowed}
+.tile.dis b{color:var(--low)}
+.tile.dis em{color:rgba(100,115,130,.8)}
+.tile.dis .dot,.tile.dis .badge{display:none}
+.tile.tone-good{--tone:var(--good)}.tile.tone-info{--tone:var(--accent)}.tile.tone-warn{--tone:var(--warn);border-color:rgba(255,176,32,.35)}
+.tile.sel{background:var(--accent-soft);border-color:rgba(76,141,255,.5)}
+.panel{background:var(--surface);border:1px solid var(--hairline);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.panel.tight{padding:10px;gap:8px}
+.panel-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.panel-h b{display:block;font-size:14px;font-weight:500;color:var(--hi)}
+.panel-h span{display:block;font-size:11.5px;color:var(--low);line-height:1.4}
+.bigval{font-size:26px;font-weight:600;line-height:1.2;color:var(--hi);letter-spacing:-.4px;font-feature-settings:"tnum"}
+.range{height:4px;background:var(--hairline);border-radius:999px;position:relative;margin:4px 6px 4px 0}
+.range i{position:absolute;inset:0 auto 0 0;border-radius:999px;background:var(--accent)}
+.range i::after{content:"";position:absolute;right:-6px;top:50%;width:14px;height:14px;border-radius:50%;background:var(--accent);transform:translateY(-50%)}
+.cmdrow{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;color:var(--good);padding:3px 0}
+.cmdrow:first-of-type{border-top:0}
+.cmdrow .ok{color:var(--good);font-size:13px}
+.cmdrow .ms{font-family:var(--mono);font-size:10.5px;color:var(--low)}
+.cmdrow.bad{color:var(--bad)}
+.kv{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;padding:1px 0}
+.kv span{color:var(--low);flex:none;white-space:nowrap}
+.kv b{font-size:13px;font-weight:500;color:var(--hi);font-feature-settings:"tnum";text-align:right;flex:1 1 auto;min-width:0}
+.kv b.good{color:var(--good)}
+.note-inline{font-size:10.5px;line-height:1.55;color:var(--low)}
+
+/* ============ 仪表页 ============ */
+.cl{
+  position:absolute;inset:0;display:flex;flex-direction:column;padding:8px 11px 6px;
+  --su:132px;--band:#FFB300;--glow:rgba(255,179,0,.16);
+  background:radial-gradient(120% 92% at 50% 0%,#0B1016 0%,rgba(6,9,13,.65) 56%,#020304 100%);
+  overflow:hidden;
+}
+.cl-top{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
+.cl-halo{position:absolute;width:calc(var(--su)*2.15);height:calc(var(--su)*2.15);border-radius:50%;background:radial-gradient(closest-side,var(--glow),transparent 72%)}
+.cl-num{
+  position:relative;z-index:1;font-size:var(--su);font-weight:800;line-height:.9;letter-spacing:-3px;
+  background:linear-gradient(180deg,#F4F8FF 0%,var(--band) 58%,var(--band) 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 24px var(--glow));font-variant-numeric:tabular-nums;
+}
+.cl-unit{font-size:calc(var(--su)*.18);font-weight:600;letter-spacing:.18em;color:var(--low);margin-top:3px;position:relative;z-index:1}
+.rail{display:flex;gap:3px;height:3px;width:calc(var(--su)*1.02);margin-top:12px;position:relative;z-index:1}
+.rail i{display:block;height:100%;border-radius:2px;background:#232C36;transition:background .3s,opacity .3s,box-shadow .3s}
+.shift{display:flex;align-items:center;gap:9px;margin-top:13px;position:relative;z-index:1}
+.shift span{font-size:calc(var(--su)*.22);font-weight:700;line-height:1;color:var(--low);opacity:.4;transition:opacity .25s,transform .25s,color .25s}
+.shift span[data-g="P"].on{color:var(--good)}
+.shift span[data-g="R"].on{color:var(--c3)}
+.shift span[data-g="N"].on{color:var(--warn)}
+.shift span[data-g="D"].on{color:var(--c0)}
+.shift span.on{opacity:1;transform:scale(1.12)}
+.cl-bottom{display:flex;align-items:center;gap:7px;height:188px;flex:none}
+.cl-power{flex:.78;min-width:0}
+.cl-trip{flex:1.22;min-width:0;height:100%}
+.gwrap{width:100%;aspect-ratio:1;position:relative}
+.gwrap svg{width:100%;height:100%;overflow:visible}
+.gtext{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.gtext b{font-size:calc(var(--su)*.215);font-weight:650;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.gtext span{font-size:8px;letter-spacing:.14em;color:var(--low)}
+.gtext em{font-style:normal;font-size:8px;letter-spacing:.18em;color:var(--low);margin-top:1px}
+.cl-trip{
+  background:rgba(27,34,42,.72);border:1px solid var(--hairline-soft);border-radius:12px;
+  padding:7px 8px;display:flex;flex-direction:column;gap:4px;
+}
+.trip-h{display:flex;align-items:center;justify-content:space-between;font-size:8.5px;letter-spacing:.12em;color:var(--low);text-transform:uppercase}
+.trip-h .live{color:var(--data);letter-spacing:.04em;display:inline-flex;align-items:center;gap:3px}
+.trip-h .live::before{content:"";width:4px;height:4px;border-radius:50%;background:var(--data);box-shadow:0 0 6px var(--data);animation:breathe 1.6s infinite}
+.route{flex:1;min-height:48px;position:relative}
+.route svg{position:absolute;inset:0;width:100%;height:100%}
+.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:2px 7px}
+.tg span{display:block;font-size:7px;letter-spacing:.08em;color:var(--low);text-transform:uppercase;line-height:1.2}
+.tg b{display:block;font-size:11px;font-weight:600;line-height:1.35;white-space:nowrap}
+.tg b em{font-style:normal;font-size:7px;color:var(--low);margin-left:1px;font-weight:500}
+.cl-tells{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;flex:none}
+.tc{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;border:1px solid var(--hairline-soft);background:rgba(20,25,32,.6);font-size:8.3px;color:var(--mid);letter-spacing:.02em}
+.tc i{width:4px;height:4px;border-radius:50%;background:var(--good);box-shadow:0 0 6px var(--good)}
+.tc.cyan i{background:var(--data);box-shadow:0 0 6px var(--data)}
+.tc.dim{opacity:.55}
+/* 驻车版面 */
+.cl[data-mode="drive"] .park-only{display:none}
+.cl[data-mode="parked"] .drive-only{display:none}
+.cl-park{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:0 4px 0 8px}
+.cl-clockwrap{width:56%;text-align:center}
+.cl-clock{font-size:54px;font-weight:800;letter-spacing:-1.5px;line-height:1;color:var(--hi);font-feature-settings:"tnum"}
+.cl-date{font-size:11.5px;color:var(--mid);letter-spacing:.05em;margin-top:4px}
+.pk-cards{width:56%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.pk{
+  background:rgba(27,34,42,.72);border:1px solid var(--hairline-soft);border-radius:12px;
+  padding:6px;display:flex;flex-direction:column;align-items:center;gap:1px;text-align:center;
+}
+.pk span{font-size:9px;color:var(--low);line-height:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk small{font-size:8.5px;color:var(--low);line-height:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk b{font-size:18px;font-weight:700;line-height:23px;letter-spacing:0;font-feature-settings:"tnum";white-space:nowrap}
+.cl-ring{position:absolute;right:0;bottom:0;width:40%;aspect-ratio:1}
+.cl-ring svg{width:100%;height:100%}
+.cl-ring .rtext{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.cl-ring .rtext b{font-size:calc(var(--su)*.44);font-weight:700;line-height:1;color:var(--hi)}
+.cl-ring .rtext span{font-size:7.5px;letter-spacing:.16em;color:var(--low)}
+/* 接续 */
+.resume-pill{
+  position:absolute;left:9px;right:9px;top:46px;z-index:8;display:flex;align-items:center;justify-content:space-between;
+  border-radius:999px;background:rgba(59,196,107,.16);border:1px solid rgba(59,196,107,.5);
+  color:#56D685;font-size:9.5px;letter-spacing:.02em;overflow:hidden;
+  opacity:0;transform:translateY(-5px);pointer-events:none;transition:opacity .3s,transform .3s;
+  backdrop-filter:blur(8px);
+}
+.resume-pill.show{opacity:1;transform:none;pointer-events:auto}
+.resume-pill.ack{background:rgba(59,196,107,.24)}
+.resume-pill button{background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:7px 8px;white-space:nowrap}
+.resume-pill .x{opacity:.65;padding-right:10px;font-size:9px}
+
+/* ============ 控制页 ============ */
+.tile-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* ============ 统计页 ============ */
+.lc{background:var(--surface);border:1px solid var(--hairline);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:4px}
+.lc-head{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
+.lc-title{font-size:10.5px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--low)}
+.lc-val{display:flex;align-items:baseline;gap:3px;font-size:10.5px;font-weight:600;letter-spacing:1.6px;color:var(--low)}
+.lc-val b{font-size:20px;font-weight:600;letter-spacing:0;line-height:22px;color:var(--hi);font-feature-settings:"tnum"}
+.lc svg{width:100%;height:84px;display:block;margin-top:2px;overflow:visible}
+.lc .gridline{stroke:#1A2129;stroke-width:1;stroke-dasharray:4 8}
+.lc-foot{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;line-height:1.4;color:var(--low)}
+.tr-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.tr-chips::-webkit-scrollbar{display:none}
+.tr-chip{
+  flex:none;padding:5px 10px;border-radius:999px;border:1px solid rgba(155,170,186,.28);
+  background:rgba(155,170,186,.10);color:var(--mid);font-size:11px;line-height:1;
+  font-weight:500;white-space:nowrap;cursor:pointer;font-family:inherit;
+}
+.tr-chip.on{border-color:rgba(76,141,255,.55);background:var(--accent-soft);color:var(--accent)}
+.trip-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10.5px;color:var(--low);min-width:0}
+.trip-head span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trip-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.trip-cell{min-width:0}
+.trip-cell span{display:block;font-size:10.5px;color:var(--low);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trip-cell b{display:block;font-size:14px;font-weight:500;line-height:1.4;margin-top:1px;color:var(--hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.map{position:relative;height:300px;border-radius:10px;overflow:hidden;background:#0A1015}
+.map svg{position:absolute;inset:0;width:100%;height:100%}
+.map .attr{position:absolute;right:6px;bottom:5px;font-size:7px;color:#5C6B79;letter-spacing:.02em}
+.map .mapbadge{position:absolute;left:7px;top:7px;font-size:7.5px;color:#9BAABA;background:rgba(8,10,13,.7);border:1px solid var(--hairline-soft);border-radius:999px;padding:3px 7px}
+.btn-line{width:100%;padding:8px;border-radius:10px;border:1px solid var(--hairline);background:var(--raised);color:var(--mid);font-size:10px;cursor:pointer}
+.btn-line:hover{color:var(--hi);border-color:#33414F}
+
+/* ============ 工具页 ============ */
+.subtabs{display:flex;gap:6px;overflow-x:auto;padding:1px 0 2px;scrollbar-width:none;margin:0 -1px}
+.subtabs::-webkit-scrollbar{display:none}
+.stab{
+  flex:none;padding:5px 10px;border-radius:999px;border:1px solid rgba(155,170,186,.28);
+  background:rgba(155,170,186,.10);color:var(--mid);font-family:inherit;
+  font-size:11px;line-height:1;font-weight:500;white-space:nowrap;cursor:pointer;
+}
+.stab.on{background:var(--accent-soft);border-color:rgba(76,141,255,.55);color:var(--accent)}
+.toolview{display:none;flex-direction:column;gap:12px}
+.toolview.on{display:flex;animation:pageIn .18s ease}
+.hint.t-mid{--cr:155,170,186}
+
+/* 事故处理：BigPanel / BigLine / 取证表单 */
+.bigpanel{
+  background:var(--raised);border:1px solid var(--hairline-soft);border-radius:10px;
+  padding:12px;display:flex;flex-direction:column;gap:8px;
+}
+.bigpanel h4{font-size:19px;font-weight:700;line-height:1.3;color:var(--hi)}
+.bigline{font-size:16px;line-height:24px;color:var(--mid)}
+.cap{font-size:11px;font-weight:500;line-height:1.4;color:var(--low)}
+.cap.warn{color:var(--warn)}
+.loc-title{font-size:19px;font-weight:700;line-height:1.3;color:var(--hi)}
+.loc-meta{font-size:11px;font-weight:500;line-height:1.4;color:var(--low)}
+.tile-row{display:flex;gap:8px}
+.tile-row .tile{flex:1;min-width:0}
+.tile.fixed96{flex:none;width:96px;justify-content:center}
+.tile.fixed110{flex:none;width:110px;justify-content:center}
+.tile.mini{min-height:44px;padding:8px 10px;justify-content:center;flex:none;width:72px}
+.tile.mini b{font-size:14px;line-height:1.3}
+.tile.tone-bad{--tone:var(--bad)}
+.tile.tone-bad:not(.sel){border-color:rgba(240,74,80,.35)}
+.tile .dot.tone-bad{background:var(--bad)}
+.tile.plain{border-color:var(--hairline)}
+.tile.plain .dot{background:var(--mid)}
+.tile.static{cursor:default}
+.tile.static:active{transform:none}
+.lbar{height:4px;border-radius:999px;background:var(--hairline);overflow:hidden}
+.lbar i{display:block;height:100%;width:33%;background:var(--accent)}
+.photo-task{
+  display:flex;flex-direction:column;gap:6px;
+  background:var(--raised);border-radius:8px;padding:8px 10px;
+}
+.photo-task.done{background:rgba(59,196,107,.08)}
+.photo-head{display:flex;align-items:flex-start;gap:8px}
+.photo-head .mark{font-size:17px;font-weight:700;line-height:1.25;color:var(--low);flex:none}
+.photo-task.done .photo-head .mark{color:var(--good)}
+.photo-head .pt{flex:1;min-width:0}
+.photo-head b{display:block;font-size:15px;font-weight:600;line-height:1.35;color:var(--hi)}
+.photo-head span{display:block;font-size:10.5px;font-weight:500;line-height:1.4;color:var(--low);margin-top:1px}
+.photo-row{display:flex;align-items:center;gap:6px}
+.photo-row .shots{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+.photo-row .shots::-webkit-scrollbar{display:none}
+.photo-row .shot{width:52px;height:52px;flex:none;border-radius:6px;background:linear-gradient(140deg,#21384F,#0E1B28);position:relative;overflow:hidden;border:1px solid var(--hairline-soft)}
+.photo-row .shot::after{content:"";position:absolute;inset:0;background:radial-gradient(55% 55% at 32% 28%,rgba(255,255,255,.2),transparent 72%)}
+.photo-row .none{flex:1;font-size:10.5px;line-height:1.4;color:var(--low)}
+.hotline{display:flex;align-items:center;gap:10px;border-radius:8px;padding:10px;cursor:default}
+.hotline.on{background:rgba(76,141,255,.10);border:1px solid rgba(76,141,255,.45)}
+.hotline .hm{flex:1;min-width:0}
+.hotline b{display:block;font-size:15px;font-weight:400;line-height:1.35;color:var(--mid)}
+.hotline.on b{color:var(--hi)}
+.hotline span{display:block;font-size:10px;line-height:1.4;color:var(--accent);margin-top:1px}
+.hotline code{font-family:var(--mono);font-size:16px;color:var(--accent);white-space:nowrap}
+
+/* 行车记录仪 */
+.ev-list{display:flex;flex-direction:column}
+.evrow{
+  display:flex;flex-direction:column;gap:2px;background:var(--raised);
+  padding:8px 10px;cursor:pointer;
+}
+.evrow .er-h{display:flex;align-items:center;gap:8px}
+.evrow .tm{font-size:13px;line-height:1.5;color:var(--hi)}
+.evrow.sel .tm{color:var(--accent)}
+.evrow .src{font-size:11px;font-weight:500;color:var(--mid)}
+.evrow .imp{font-size:11px;font-weight:500;color:var(--bad)}
+.evrow .caret{margin-left:auto;font-size:14px;color:var(--mid)}
+.evrow .addr{font-size:11.5px;line-height:1.5;color:var(--mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.evrow .addr.no{color:var(--low)}
+.evrow .meta{font-size:10.5px;font-weight:500;line-height:1.4;color:var(--low);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dc-expand{display:flex;flex-direction:column;gap:8px;padding:8px 0 12px}
+.camtxt{font-size:10.5px;font-weight:500;line-height:1.4;color:var(--low)}
+.camgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cam{position:relative;aspect-ratio:4/3;overflow:hidden;background:#000}
+.cam::before{
+  content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(62% 34% at 50% 76%,rgba(120,160,195,.15),transparent 72%),
+    repeating-linear-gradient(90deg,transparent 0 34px,rgba(170,200,225,.06) 34px 35px),
+    linear-gradient(180deg,#101B26 0%,#0A1017 58%,#0C141B 100%);
+}
+.cam::after{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(53,198,224,.35),transparent);animation:camScan 5s linear infinite}
+.cam .clabel,.cam .ctime{
+  position:absolute;left:4px;z-index:2;font-size:10px;line-height:1.2;color:#fff;
+  background:rgba(0,0,0,.4);padding:2px 5px;
+}
+.cam .clabel{top:4px}
+.cam .ctime{bottom:4px;font-family:var(--mono);letter-spacing:.02em}
+.cam .cspeed{position:absolute;right:4px;top:4px;z-index:2;background:rgba(0,0,0,.4);padding:3px 6px;display:flex;flex-direction:column;align-items:flex-end;color:#fff}
+.cam .cspeed b{font-size:20px;line-height:1.1;font-weight:700}
+.cam .cspeed em{font-style:normal;font-size:8px;line-height:1.2;color:rgba(255,255,255,.7)}
+.cam .cspeed svg{width:44px;height:22px;margin-top:2px;display:block}
+.slider{height:4px;border-radius:999px;background:var(--hairline);position:relative;margin:6px 8px 6px 0}
+.slider i{position:absolute;inset:0 auto 0 0;border-radius:999px;background:var(--accent);width:18%}
+.slider i::after{content:"";position:absolute;right:-8px;top:50%;width:16px;height:16px;border-radius:50%;background:var(--accent);transform:translateY(-50%)}
+.prog-line{font-size:10.5px;font-weight:500;line-height:1.4;color:var(--low);font-variant-numeric:tabular-nums}
+.stepper{display:flex;flex-direction:column;align-items:center;gap:6px}
+.stepper .eyebrow{font-size:10.5px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--low)}
+.stepper .srow{display:flex;align-items:center;gap:6px}
+.stepper .num{font-size:14px;font-weight:500;line-height:1.5;color:var(--hi);font-variant-numeric:tabular-nums;padding:0 4px;min-width:38px;text-align:center}
+.stepper .t{font-size:10.5px;font-weight:500;color:var(--low);font-variant-numeric:tabular-nums}
+.kv b.warn{color:var(--warn)}
+.kv b.bad{color:var(--bad)}
+.e-num{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;line-height:1.5;color:var(--hi);padding:8px 0}
+
+/* 零百与车机皮肤 */
+.run-state{font-size:14px;font-weight:500;line-height:1.5;color:var(--accent)}
+.res-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;background:var(--raised)}
+.res-meta b{display:block;font-size:13px;font-weight:400;line-height:1.5;color:var(--hi)}
+.res-meta span{display:block;font-size:10.5px;font-weight:500;line-height:1.4;color:var(--low);margin-top:1px}
+.res-row>strong{font-size:19px;line-height:1.3;color:var(--accent);font-weight:400;white-space:nowrap}
+.wrap-row{display:flex;gap:10px;align-items:center;padding:8px 10px;background:var(--raised)}
+.wrap-row.bad{background:rgba(240,74,80,.10)}
+.wrap-thumb{width:56px;height:56px;border-radius:4px;background:linear-gradient(140deg,var(--a),var(--b));flex:none;position:relative;overflow:hidden}
+.wrap-thumb::after{content:"";position:absolute;inset:0;background:radial-gradient(60% 60% at 30% 25%,rgba(255,255,255,.24),transparent 70%)}
+.wrap-meta{flex:1;min-width:0}
+.wrap-meta b{font-size:13px;display:block;font-weight:400;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wrap-meta span{font-size:10.5px;font-weight:500;line-height:1.4;color:var(--low);display:block;margin-top:1px}
+.wrap-meta .badline{color:var(--bad)}
+.rule{font-size:11.5px;line-height:1.55;color:var(--mid)}
+.rule.low{color:var(--low)}
+
+/* ============ 设置页 ============ */
+.set-pills{display:flex;gap:6px;flex-wrap:wrap}
+.inp{display:flex;align-items:center;gap:8px;min-height:56px;padding:0 16px;border:1px solid var(--hairline);border-radius:4px;background:var(--raised);font-size:14.5px;line-height:1.5;color:var(--hi);font-feature-settings:"tnum"}
+.inp>span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:clip;white-space:nowrap}
+.inp .empty{color:var(--low)}
+.inp .dd{color:var(--mid);flex:none}
+.fwrap{position:relative;margin-top:6px}
+.fwrap>em{position:absolute;top:-6px;left:10px;z-index:1;background:var(--raised);padding:0 4px;font-style:normal;font-size:11.5px;line-height:1.2;color:var(--low)}
+.pubkey{display:flex;flex-wrap:wrap;column-gap:8px;font-family:var(--mono);font-size:10.5px;line-height:1.8;color:var(--mid)}
+.switch{width:44px;height:24px;border-radius:999px;background:var(--hairline);border:1px solid #2B3540;position:relative;flex:none}
+.switch::after{content:"";position:absolute;left:5px;top:50%;transform:translateY(-50%);width:16px;height:16px;border-radius:50%;background:var(--mid)}
+.idphoto{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.idphoto .box{width:100%;height:86px;border-radius:8px;border:1px solid rgba(76,141,255,.45);background:linear-gradient(140deg,#22384D 0%,#101D2A 55%,#0B141D 100%);position:relative;overflow:hidden;display:grid;place-items:center}
+.idphoto .box::after{content:"";position:absolute;inset:0;background:radial-gradient(55% 55% at 30% 22%,rgba(255,255,255,.18),transparent 70%)}
+.idphoto .box span{position:relative;z-index:1;font-size:11px;color:rgba(232,238,245,.55)}
+.idphoto .ops{display:flex;gap:6px}
+.band-edit{display:flex;flex-direction:column;gap:2px}
+.band-row{display:flex;align-items:center;gap:8px;padding:2px 0}
+.band-row .brl{flex:1;font-size:13px;color:var(--mid)}
+.stepbtn{width:38px;height:34px;flex:none;border-radius:8px;border:1px solid var(--hairline);background:var(--raised);color:var(--hi);font-size:18px;line-height:1;font-weight:700;cursor:pointer;display:grid;place-items:center;padding:0}
+.stepbtn:hover{border-color:var(--accent);background:rgba(76,141,255,.2)}
+.band-row b{width:40px;flex:none;text-align:center;font-size:14px;font-weight:700;color:var(--hi);font-variant-numeric:tabular-nums}
+.bcolor{display:flex;align-items:center;gap:8px;padding:3px 0}
+.bcolor .bdot{width:10px;height:10px;flex:none;border-radius:50%;background:var(--c)}
+.bcolor .brange{width:70px;flex:none;font-size:10.5px;color:var(--mid);font-variant-numeric:tabular-nums;white-space:nowrap}
+.swatches{display:flex;gap:7px;flex:1;min-width:0;flex-wrap:nowrap;overflow-x:auto;padding:4px 2px;scrollbar-width:none}
+.swatches::-webkit-scrollbar{display:none}
+.swatch{width:24px;height:24px;flex:none;border-radius:50%;border:1px solid var(--hairline);background:var(--c);cursor:pointer;padding:0;transition:transform .12s}
+.swatch:hover{transform:scale(1.1)}
+.swatch.on{border:2px solid var(--hi)}
+
+/* ============ 指标条 ============ */
+.stats-strip{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hairline-soft);
+  border-top:1px solid var(--hairline-soft);border-bottom:1px solid var(--hairline-soft);
+}
+.stats-strip div{background:var(--ink);padding:22px 26px}
+.stats-strip b{display:block;font-size:25px;font-weight:650;letter-spacing:-.03em}
+.stats-strip b em{font-style:normal;font-size:11px;color:var(--low);font-weight:500;letter-spacing:0;margin-left:3px}
+.stats-strip span{display:block;margin-top:5px;font-size:11px;color:var(--mid);letter-spacing:.04em}
+
+/* ============ 通用 section ============ */
+section{padding:96px 0}
+.sec-head{max-width:680px;margin-bottom:40px}
+.sec-head h2{font-size:clamp(28px,3vw,38px);line-height:1.18;letter-spacing:-.025em;margin-top:14px;font-weight:650}
+.sec-head p{margin-top:14px;color:var(--mid);font-size:14.5px;line-height:1.7}
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+.reveal.in{opacity:1;transform:none}
+
+/* ============ 延迟 ============ */
+.latency-grid{display:grid;grid-template-columns:.92fr 1.08fr;gap:46px;align-items:center}
+.latency-copy h2{font-size:clamp(28px,3vw,38px);letter-spacing:-.025em;margin-top:14px;font-weight:650}
+.latency-copy p{color:var(--mid);font-size:14.5px;line-height:1.75;margin-top:14px}
+.latency-copy p b{color:var(--hi);font-weight:600}
+.tiny-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:26px}
+.tiny{border:1px solid var(--hairline-soft);border-radius:14px;padding:13px;background:rgba(20,25,32,.5)}
+.tiny b{display:block;font-size:12px;margin-bottom:5px;color:var(--hi)}
+.tiny span{font-size:10.5px;line-height:1.5;color:var(--low);display:block}
+.paths{
+  border:1px solid var(--hairline);border-radius:22px;padding:24px;
+  background:linear-gradient(180deg,rgba(20,25,32,.85),rgba(11,14,18,.9));
+  display:flex;flex-direction:column;gap:20px;
+}
+.path-row{display:grid;grid-template-columns:74px 1fr 104px;gap:12px;align-items:center}
+.path-label{font-size:11px;color:var(--mid);letter-spacing:.04em}
+.path-label b{display:block;color:var(--hi);font-size:12px;font-weight:600;margin-bottom:2px}
+.track{position:relative;height:46px}
+.track .line{position:absolute;left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,transparent,#2B3745 12%,#2B3745 88%,transparent)}
+.node{position:absolute;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;z-index:2}
+.node span{width:9px;height:9px;border-radius:50%;border:1px solid #3A4A5B;background:#0D1319;display:block}
+.node small{position:absolute;top:15px;font-size:8.5px;color:var(--low);white-space:nowrap;letter-spacing:.02em}
+.node.a{left:6%}.node.b{left:50%}.node.c{left:94%}
+.packet{position:absolute;top:50%;width:7px;height:7px;border-radius:50%;transform:translate(-50%,-50%);z-index:3}
+.packet.blue{background:var(--accent);box-shadow:0 0 14px var(--accent);animation:travelDirect 2.8s linear infinite}
+.packet.cyan{background:var(--warn);box-shadow:0 0 12px var(--warn);animation:travelCloud 4.6s linear infinite}
+.path-badge{font-size:10.5px;letter-spacing:.02em;text-align:right;color:var(--good)}
+.path-badge.muted{color:var(--low)}
+@keyframes travelDirect{0%{left:6%;opacity:0}10%{opacity:1}86%{opacity:1}100%{left:94%;opacity:0}}
+@keyframes travelCloud{0%{left:6%;opacity:0}8%{opacity:1}40%{left:50%;opacity:1}56%{left:50%;opacity:1}92%{left:94%;opacity:1}100%{left:94%;opacity:0}}
+
+/* ============ 模拟器 ============ */
+#screens{padding-top:92px}
+.sim{display:grid;grid-template-columns:226px 1fr;gap:44px;align-items:start}
+.sim-nav{position:sticky;top:86px;display:flex;flex-direction:column;gap:16px}
+.sim-group{display:flex;flex-direction:column;gap:3px}
+.sim-group>span{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--low);padding:0 10px 5px}
+.sim-link{
+  width:100%;display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  border:0;border-left:2px solid transparent;background:none;color:var(--mid);
+  padding:7px 9px;font-size:12.2px;text-align:left;cursor:pointer;transition:color .2s,background .2s,border-color .2s;
+}
+.sim-link small{font-size:9.2px;color:var(--low);letter-spacing:.02em;transition:color .2s}
+.sim-link:hover{color:var(--hi);background:rgba(255,255,255,.02)}
+.sim-link.on{color:var(--hi);border-left-color:var(--accent);background:linear-gradient(90deg,rgba(76,141,255,.13),transparent 85%)}
+.sim-link.on small{color:#8FB6F0}
+.sim-stage{--ps:1;position:sticky;top:86px;display:flex;flex-direction:column;align-items:center;gap:12px;justify-self:center}
+.sim-stage .pwrap{--ps:inherit}
+.stage-bar{width:384px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.stage-kicker{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--low)}
+.stage-kicker b{color:var(--mid);font-weight:600}
+.stage-name{font-size:12px;color:var(--mid);letter-spacing:.02em}
+.pd-switch{display:flex;gap:2px;padding:2px;border:1px solid var(--hairline);border-radius:999px;background:var(--surface)}
+.pd-switch button{
+  width:30px;height:22px;border-radius:999px;border:0;background:none;color:var(--low);
+  font-size:10.5px;font-weight:700;cursor:pointer;transition:background .2s,color .2s;
+}
+.pd-switch button.on{background:var(--accent-soft);color:var(--accent)}
+.sim-copy{width:384px;padding-top:2px}
+.sim-copy h3{font-size:16px;font-weight:620;letter-spacing:-.01em}
+.sim-copy p{margin-top:6px;font-size:11.5px;line-height:1.65;color:var(--mid)}
+.sim-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.sim-chips span{font-size:9px;color:var(--low);border:1px solid var(--hairline-soft);border-radius:999px;padding:3px 7px}
+.sim-hint{margin-top:9px;font-size:10px;line-height:1.55;color:var(--low)}
+.sim-hint b{color:var(--mid);font-weight:550}
+
+/* ============ 安全 ============ */
+.security{
+  border:1px solid var(--hairline);border-radius:26px;
+  background:
+    radial-gradient(60% 100% at 90% 10%,rgba(59,196,107,.07),transparent 60%),
+    linear-gradient(180deg,rgba(20,25,32,.9),rgba(11,14,18,.95));
+  padding:42px;display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;
+}
+.security h2{font-size:clamp(26px,2.8vw,34px);letter-spacing:-.02em;margin-top:12px}
+.security p{margin-top:14px;color:var(--mid);font-size:14px;line-height:1.75;max-width:460px}
+.sec-list{list-style:none;padding:0;margin:24px 0 0;display:flex;flex-direction:column;gap:12px}
+.sec-list li{display:flex;gap:11px;font-size:12.5px;line-height:1.55;color:var(--mid)}
+.sec-list li b{color:var(--hi);font-weight:600}
+.sec-list .n{
+  flex:0 0 auto;width:19px;height:19px;border-radius:6px;border:1px solid rgba(59,196,107,.3);
+  background:rgba(59,196,107,.08);color:var(--good);font-size:9.5px;display:grid;place-items:center;
+  font-family:var(--mono);margin-top:1px;
+}
+.sec-visual{position:relative;min-height:260px;display:grid;place-items:center}
+.chain{display:flex;flex-direction:column;align-items:center;gap:0;width:100%;max-width:330px}
+.chain .item{
+  width:100%;border:1px solid var(--hairline);border-radius:14px;padding:13px 15px;
+  background:rgba(11,14,18,.72);display:flex;align-items:center;justify-content:space-between;gap:10px;
+  position:relative;z-index:2;
+}
+.chain .item b{font-size:12px;font-weight:600}
+.chain .item span{font-size:9px;color:var(--low);letter-spacing:.04em;text-align:right}
+.chain .item.key{border-color:rgba(76,141,255,.32)}
+.chain .item.sealed{border-color:rgba(59,196,107,.4);box-shadow:0 0 30px -12px rgba(59,196,107,.5)}
+.chain .item.cloud{opacity:.38;text-decoration:line-through;border-style:dashed}
+.chain .link{width:1px;height:22px;background:linear-gradient(180deg,#2B3745,#3BC46B);position:relative}
+.chain .link::after{
+  content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;border-radius:50%;
+  background:var(--good);box-shadow:0 0 8px var(--good);transform:translate(-50%,-50%);
+  animation:drop 2.2s ease-in-out infinite;
+}
+.fp{
+  margin-top:16px;font-family:var(--mono);font-size:9px;color:var(--low);letter-spacing:.08em;
+  border:1px dashed #2B3745;border-radius:8px;padding:6px 10px;background:rgba(8,10,13,.5);
+}
+.fp b{color:var(--mid);font-weight:500}
+
+/* ============ 上车 ============ */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.step{
+  border:1px solid var(--hairline);border-radius:18px;padding:22px;background:rgba(20,25,32,.55);
+  position:relative;transition:border-color .25s,transform .25s;
+}
+.step:hover{border-color:#33414F;transform:translateY(-2px)}
+.step .no{
+  font-family:var(--mono);font-size:10px;color:var(--data);border:1px solid rgba(53,198,224,.28);
+  background:rgba(53,198,224,.07);border-radius:7px;padding:4px 7px;display:inline-block;letter-spacing:.06em;
+}
+.step h3{font-size:15px;margin-top:14px;font-weight:600}
+.step p{margin-top:8px;font-size:11.5px;line-height:1.65;color:var(--mid)}
+.step p b{color:var(--hi);font-weight:600}
+.note{
+  margin-top:18px;font-size:11px;line-height:1.7;color:var(--low);
+  border-left:2px solid var(--hairline);padding-left:14px;
+}
+.note b{color:var(--mid);font-weight:500}
+
+/* ============ footer ============ */
+footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
+.foot{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.foot .brand{font-size:13px}
+.foot p{font-size:10.5px;line-height:1.7;color:var(--low);max-width:560px}
+.foot .meta{text-align:right;font-size:10px;color:var(--low);line-height:1.7}
+.foot .meta b{color:var(--mid);font-weight:500}
+
+@keyframes breathe{0%,100%{opacity:.45;transform:scale(.9)}50%{opacity:1;transform:scale(1.08)}}
+@keyframes drop{0%{top:0;opacity:0}20%{opacity:1}100%{top:100%;opacity:0}}
+@keyframes camScan{0%{transform:translateY(0);opacity:0}12%{opacity:1}88%{opacity:.7}100%{transform:translateY(180px);opacity:0}}
+
+@media (max-width:1100px){
+  .hero{grid-template-columns:minmax(0,1fr);gap:34px;padding-top:46px}
+  .hero-copy{max-width:640px}
+  .hero-copy,.hero-pwrap,.sim-nav,.sim-stage{min-width:0}
+  .hero-pwrap{justify-content:flex-start;padding-left:4px}
+  .latency-grid{grid-template-columns:1fr;gap:28px}
+  .security{grid-template-columns:1fr;padding:30px}
+  .sec-visual{min-height:220px}
+  .sim{grid-template-columns:minmax(0,1fr);gap:22px}
+  .sim-nav{position:static;flex-direction:row;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+  .sim-nav::-webkit-scrollbar{display:none}
+  .sim-group{flex-direction:row;align-items:center;gap:4px;flex:none}
+  .sim-group>span{display:none}
+  .sim-link{width:auto;white-space:nowrap;border-left:0;border-bottom:2px solid transparent;padding:7px 10px}
+  .sim-link.on{border-left:0;border-bottom-color:var(--accent);background:none}
+  .sim-link small{display:none}
+  .sim-stage{position:static}
+  .stats-strip{grid-template-columns:repeat(2,1fr)}
+  .steps{grid-template-columns:1fr}
+  /* 6 个导航项在中等宽度也放得下（二字词 + 26px 间距 ≈ 282px），不再隐藏任何一项 */
+}
+@media (max-height:940px){
+  .sim-stage{--ps:.82}
+}
+@media (max-width:640px){
+  .wrap{padding:0 18px}
+  section{padding:68px 0}
+  .hero{padding-top:38px}
+  .hero-copy h1{font-size:clamp(34px,10vw,44px)}
+  .hero-copy .lead{font-size:14px}
+  .pwrap{--ps:.86;width:100%}
+  .phone{box-shadow:0 40px 80px -40px #000,inset 0 0 0 1px #46525F,inset 0 0 0 3px #0A0E12}
+  .stage-bar,.sim-copy{width:min(calc(384px * var(--ps)),100%)}
+  .stage-name{display:none}
+  .sim-stage{--ps:.86}
+  .stats-strip div{padding:18px 16px}
+  .stats-strip b{font-size:21px}
+  .nav-links{display:none}
+  .path-row{grid-template-columns:60px 1fr 78px;gap:8px}
+  .path-badge{font-size:9px}
+  .security{padding:22px;border-radius:20px}
+  .foot .meta{text-align:left}
+  .hero-pwrap{justify-content:center}
+}
+@media (max-width:380px){
+  .pwrap,.sim-stage{--ps:.78}
+}
+@media (max-height:940px) and (max-width:640px){
+  .sim-stage{--ps:.8}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="tdBadge" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#63B3FF"/><stop offset="1" stop-color="#2ED3C8"/>
+  </linearGradient>
+  <mask id="tdBadgeCut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+    <rect width="24" height="24" fill="#fff"/>
+    <path d="M4.4 6.8h9M8.9 6.8v12.6" stroke="#000" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M16 12.9h4.6" stroke="#000" stroke-width="3.2" stroke-linecap="round"/>
+  </mask>
+  <symbol id="i-ctrl" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="i-tools" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-4.6"/><circle cx="12" cy="17" r="1.1"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M7 15l4-5 3 3 5-7"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7"/></symbol>
+</defs></svg>
+<div class="progress" id="progress"></div>
+
+<header>
+  <div class="wrap nav">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="url(#tdBadge)" mask="url(#tdBadgeCut)"/></svg>
+      </span>
+      T-Dash <small>v0.3.0</small>
+    </div>
+    <nav class="nav-links" aria-label="页面导航">
+      <a href="#screens">功能</a>
+      <a href="#latency">延迟</a>
+      <a href="#security">安全</a>
+      <a href="#free">开源免费</a>
+      <a href="#start">使用</a>
+    </nav>
+    <span class="nav-ver">ANDROID · BLE ONLY</span>
+  </div>
+</header>
+
+<main>
+  <!-- ============ HERO ============ -->
+  <div class="wrap">
+    <section class="hero" aria-label="介绍">
+      <div class="hero-copy">
+        <span class="eyebrow">Tesla companion · 纯蓝牙直连</span>
+        <h1>手机，就是<br><span class="grad">你的仪表盘。</span></h1>
+        <p class="lead">
+          T-Dash 用蓝牙直接和车对话。控制、状态、轨迹、仪表全部在<b>本机</b>完成——
+          没有车主账号，没有订阅，没有遥测服务器。
+        </p>
+        <div class="chips">
+          <span class="chip"><i></i>命令往返 50–300 ms</span>
+          <span class="chip blue"><i></i>车速快车道 250 ms</span>
+          <span class="chip cyan"><i></i>车辆数据不出手机</span>
+        </div>
+        <div class="cta">
+          <a class="btn btn-primary" href="#screens">逐屏看实机界面 <span aria-hidden="true">↓</span></a>
+          <a class="btn btn-ghost" href="#security">密钥怎么保管</a>
+        </div>
+        <p class="hero-note">手机里的界面按 v0.3.0 的 Compose 排版重绘：同一套色板、同一套间距、同一套文案。车速与功率为演示动效。</p>
+      </div>
+
+      <div class="pwrap hero-pwrap">
+        <div class="phone" aria-label="T-Dash 仪表页，行车版面">
+          <div class="screen">
+            <div class="sysbar"><span data-clock>14:32</span><i class="punch"></i><span class="right"><span>5G</span><b>82%</b></span></div>
+            <div class="app-area">
+              <div class="page cluster active">
+                <div class="cl" id="heroCl" data-mode="drive" style="--su:132px;--band:#FFB300;--glow:rgba(255,179,0,.16)">
+                  <div class="cl-top drive-only">
+                    <div class="cl-halo"></div>
+                    <div class="cl-num" data-speed>92</div>
+                    <div class="cl-unit">KM/H</div>
+                    <div class="rail" data-rail><i></i><i></i><i></i><i></i><i></i></div>
+                    <div class="shift" data-shift><span data-g="P">P</span><span data-g="R">R</span><span data-g="N">N</span><span data-g="D" class="on">D</span></div>
+                  </div>
+
+                  <div class="cl-park park-only">
+                    <div class="cl-clockwrap">
+                      <div class="cl-clock" data-clock>14:32</div>
+                      <div class="cl-date" data-date>10月24日 周六</div>
+                    </div>
+                    <div class="cl-ring">
+                      <svg viewBox="0 0 120 120" aria-hidden="true">
+                        <circle cx="60" cy="60" r="48" fill="none" stroke="#232C36" stroke-width="3"/>
+                      </svg>
+                      <div class="rtext"><b>0</b><span>KM/H</span></div>
+                    </div>
+                    <div class="pk-cards">
+                      <div class="pk"><span>电量%</span><b>82</b><small>&nbsp;</small></div>
+                      <div class="pk"><span>车外°C</span><b>18</b><small>&nbsp;</small></div>
+                      <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
+                    </div>
+                  </div>
+
+                  <div class="cl-bottom drive-only">
+                    <div class="cl-power">
+                      <div class="gwrap">
+                        <svg viewBox="0 0 130 130" aria-hidden="true">
+                          <path d="M31.06 98.94 A48 48 0 1 1 98.94 98.94" fill="none" stroke="#232C36" stroke-width="5.6" stroke-linecap="round"/>
+                          <path class="arc-glow" d="M20.03 48.24 A48 48 0 0 1 46.25 20.82" fill="none" stroke="#E8EEF5" stroke-width="15" stroke-linecap="round" opacity=".12"/>
+                          <path class="arc-active" d="M20.03 48.24 A48 48 0 0 1 46.25 20.82" fill="none" stroke="#E8EEF5" stroke-width="5.6" stroke-linecap="round"/>
+                          <circle cx="31.06" cy="98.94" r="1.7" fill="#647382"/>
+                          <circle cx="20.03" cy="48.24" r="1.7" fill="#647382"/>
+                          <circle cx="98.94" cy="98.94" r="1.7" fill="#647382"/>
+                          <circle class="arc-dot-halo" cx="46.25" cy="20.82" r="4.4" fill="#080A0D"/>
+                          <circle class="arc-dot" cx="46.25" cy="20.82" r="2.7" fill="#E8EEF5"/>
+                        </svg>
+                        <div class="gtext"><b data-power>57</b><span>KW</span><em>功率</em></div>
+                      </div>
+                    </div>
+                    <div class="cl-trip">
+                      <div class="trip-h"><span>本次</span><span class="live">进行中</span></div>
+                      <div class="route">
+                        <svg viewBox="0 0 120 58" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                          <path d="M8 46 C 22 44, 26 30, 40 32 S 58 44, 72 34 S 96 18, 112 22" fill="none" stroke="#4C8DFF" stroke-width="5" stroke-linecap="round" opacity=".18"/>
+                          <path d="M8 46 C 22 44, 26 30, 40 32 S 58 44, 72 34 S 96 18, 112 22" fill="none" stroke="#4C8DFF" stroke-width="2" stroke-linecap="round"/>
+                          <circle cx="8" cy="46" r="2" fill="#9BAABA" opacity=".85"/>
+                          <circle cx="112" cy="22" r="2.7" fill="#4C8DFF"/>
+                        </svg>
+                      </div>
+                      <div class="tgrid">
+                        <div class="tg"><span>本次</span><b>12.4<em>km</em></b></div>
+                        <div class="tg"><span>用时</span><b>18:42</b></div>
+                        <div class="tg"><span>均速</span><b>40<em>km/h</em></b></div>
+                        <div class="tg"><span>朝向</span><b>东北</b></div>
+                        <div class="tg"><span>最高</span><b>118<em>km/h</em></b></div>
+                        <div class="tg"><span>总里程</span><b>3862<em>km</em></b></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="cl-tells">
+                    <span class="tc"><i></i>🔒 落锁</span>
+                    <span class="tc cyan"><i></i>❄ 空调</span>
+                    <span class="tc"><i></i>车机在线</span>
+                  </div>
+
+                  <div class="resume-pill" id="resumePill">
+                    <button type="button" id="resumeMain">⟳ 接续上一段 · 14:32 结束</button>
+                    <button type="button" class="x" id="resumeX" aria-label="收起提示">✕</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tabbar hero-tabs" aria-hidden="true">
+              <span class="tab"><svg><use href="#i-ctrl"/></svg>控制</span>
+              <span class="tab"><svg><use href="#i-tools"/></svg>工具</span>
+              <span class="tab on"><svg><use href="#i-gauge"/></svg>仪表</span>
+              <span class="tab"><svg><use href="#i-chart"/></svg>统计</span>
+              <span class="tab"><svg><use href="#i-gear"/></svg>设置</span>
+            </div>
+            <div class="gesturebar"><i></i></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="stats-strip" aria-label="关键指标">
+    <div><b>250<em>ms</em></b><span>车速 / 档位快车道</span></div>
+    <div><b>50–300<em>ms</em></b><span>BLE 命令实测往返</span></div>
+    <div><b>10<em>s</em></b><span>GPS 轨迹采样</span></div>
+    <div><b>200<em>条</em></b><span>行程只存本机</span></div>
+  </div>
+
+  <!-- ============ 模拟器（功能） ============ -->
+  <div class="wrap">
+    <section id="screens">
+      <div class="sec-head reveal">
+        <span class="eyebrow">Redrawn from the real layouts</span>
+        <h2>九块屏幕，和手机上长得一样。</h2>
+        <p>不是示意卡片。下面每一屏都按 v0.3.0 的 Compose 排版重建：TL 色板、折叠分区、状态胶囊、58dp 动作块、2×2 机位、270° 功率弧。点左侧切换页面，点 P / D 看仪表换版面。</p>
+      </div>
+
+      <div class="sim">
+        <nav class="sim-nav reveal" aria-label="界面目录">
+          <div class="sim-group">
+            <span>日常</span>
+            <button type="button" class="sim-link on" data-view="cluster" data-tool="" data-kicker="01 · 仪表" data-title="仪表 · 行车版面" data-desc="大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 自动换成时钟、三张状态卡和右下角速度环。" data-chips="状态栏|阈值轨|270° 功率弧|路径小图">仪表 <small>行车 / 驻车</small></button>
+            <button type="button" class="sim-link" data-view="control" data-tool="" data-kicker="02 · 控制" data-title="控制 · 状态先行" data-desc="顶部一排是车辆真实状态，下面是折叠分区。已经落锁时「落锁」置灰，后备箱关着时「关后备箱」置灰——按钮跟着状态走，不跟着旧读数走。" data-chips="9 枚状态胶囊|6 个折叠分区|实测延迟">控制 <small>车锁 / 空调 / 充电</small></button>
+            <button type="button" class="sim-link" data-view="stats" data-tool="" data-kicker="03 · 统计" data-title="统计 · 本次启动全量保留" data-desc="车速与功率曲线可以分别展开，下面是行程条和 GPS 轨迹。地图只是垫底，轨迹颜色来自速度分档；原始采样点一个不删。" data-chips="车速曲线|行程切换|300dp 地图">统计 <small>曲线 / 轨迹</small></button>
+          </div>
+          <div class="sim-group">
+            <span>工具</span>
+            <button type="button" class="sim-link" data-view="tools" data-tool="quick" data-kicker="04 · 工具" data-title="快捷启动 · 四个入口" data-desc="常用的四个车机 App，一键从手机拉起。全部本机执行，不需要网络。" data-chips="高德地图|支付宝|微信|美团">快捷启动 <small>Tools</small></button>
+            <button type="button" class="sim-link" data-view="tools" data-tool="accident" data-kicker="05 · 事故处理" data-title="事故处理 · 清单在现场生成" data-desc="定位、地址、报警与保险电话、拍照清单在一页里，最后生成 A4 取证 PDF。照片存到相册 TeslaLink 文件夹，不碰原有文件。" data-chips="120 / 122|拍照清单|A4 PDF">事故处理 <small>取证清单</small></button>
+            <button type="button" class="sim-link" data-view="tools" data-tool="dashcam" data-kicker="06 · 行车记录仪" data-title="行车记录仪 · U 盘直接读" data-desc="按事件目录扫描，四路同步预览；「跳到触发时刻」直接落到撞击前几秒。导出把 1–4 个机位拼成 2×2 并烙上时间码。" data-chips="2×2 机位|触发时刻|带时间码">行车记录仪 <small>U 盘 / 导出</small></button>
+            <button type="button" class="sim-link" data-view="tools" data-tool="accel" data-kicker="07 · 零百计时" data-title="零百计时 · 250 ms 车速流" data-desc="待命后从静止起步自动开表，到 100 km/h 停表。0–60 与 60–100 都是线性插值，精度约 ±0.05 s。" data-chips="自动开表|插值计时|历史成绩">零百计时 <small>0–100</small></button>
+            <button type="button" class="sim-link" data-view="tools" data-tool="wraps" data-kicker="08 · 车机皮肤" data-title="车机皮肤 · 最多 10 张" data-desc="把图片写进车机自定义皮肤目录。非 1:1 / 16:9 会先裁切，超过 1 MB 自动压缩；写入进度就地显示。" data-chips="10 张上限|自动裁切|1 MB 内">车机皮肤 <small>Wraps</small></button>
+          </div>
+          <div class="sim-group">
+            <span>本机</span>
+            <button type="button" class="sim-link" data-view="settings" data-tool="" data-kicker="09 · 设置" data-title="设置 · 连接、分档与钥匙" data-desc="日常连接状态在第一屏；扫不到车时填 BLE 地址兜底，高德 Key 只用于事故助手的地址翻译。事故取证信息、速度分档和本机钥匙都在这里，全部留在本机。" data-chips="连接兜底|取证信息|断点步进|钥匙指纹">设置 <small>连接 / 钥匙</small></button>
+          </div>
+        </nav>
+
+        <div class="sim-stage reveal">
+          <div class="stage-bar">
+            <div>
+              <div class="stage-kicker" id="stageKicker">01 · 仪表</div>
+              <div class="stage-name" id="stageName">仪表 · 行车版面</div>
+            </div>
+            <div class="pd-switch" role="group" aria-label="档位，切换驻车与行车版面">
+              <button type="button" data-mode-btn="parked">P</button>
+              <button type="button" class="on" data-mode-btn="drive">D</button>
+            </div>
+          </div>
+
+          <div class="pwrap">
+            <div class="phone">
+              <div class="screen">
+                <div class="sysbar"><span data-clock>14:32</span><i class="punch"></i><span class="right"><span>5G</span><b>82%</b></span></div>
+                <div class="app-area" id="simApp">
+                  <div class="page cluster active" data-page="cluster" aria-label="仪表">
+                    <div class="cl" id="simCl" data-mode="drive" style="--su:132px;--band:#FFB300;--glow:rgba(255,179,0,.16)">
+                      <div class="cl-top drive-only">
+                        <div class="cl-halo"></div>
+                        <div class="cl-num" data-speed>92</div>
+                        <div class="cl-unit">KM/H</div>
+                        <div class="rail" data-rail><i></i><i></i><i></i><i></i><i></i></div>
+                        <div class="shift" data-shift><span data-g="P">P</span><span data-g="R">R</span><span data-g="N">N</span><span data-g="D" class="on">D</span></div>
+                      </div>
+
+                      <div class="cl-park park-only">
+                        <div class="cl-clockwrap">
+                          <div class="cl-clock" data-clock>14:32</div>
+                          <div class="cl-date" data-date>10月24日 周六</div>
+                        </div>
+                        <div class="cl-ring">
+                          <svg viewBox="0 0 120 120" aria-hidden="true">
+                            <circle cx="60" cy="60" r="48" fill="none" stroke="#232C36" stroke-width="3"/>
+                          </svg>
+                          <div class="rtext"><b>0</b><span>KM/H</span></div>
+                        </div>
+                        <div class="pk-cards">
+                          <div class="pk"><span>电量%</span><b>82</b><small>&nbsp;</small></div>
+                          <div class="pk"><span>车外°C</span><b>18</b><small>&nbsp;</small></div>
+                          <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
+                        </div>
+                      </div>
+
+                      <div class="cl-bottom drive-only">
+                        <div class="cl-power">
+                          <div class="gwrap">
+                            <svg viewBox="0 0 130 130" aria-hidden="true">
+                              <path d="M31.06 98.94 A48 48 0 1 1 98.94 98.94" fill="none" stroke="#232C36" stroke-width="5.6" stroke-linecap="round"/>
+                              <path class="arc-glow" d="M20.03 48.24 A48 48 0 0 1 46.25 20.82" fill="none" stroke="#E8EEF5" stroke-width="15" stroke-linecap="round" opacity=".12"/>
+                              <path class="arc-active" d="M20.03 48.24 A48 48 0 0 1 46.25 20.82" fill="none" stroke="#E8EEF5" stroke-width="5.6" stroke-linecap="round"/>
+                              <circle cx="31.06" cy="98.94" r="1.7" fill="#647382"/>
+                              <circle cx="20.03" cy="48.24" r="1.7" fill="#647382"/>
+                              <circle cx="98.94" cy="98.94" r="1.7" fill="#647382"/>
+                              <circle class="arc-dot-halo" cx="46.25" cy="20.82" r="4.4" fill="#080A0D"/>
+                              <circle class="arc-dot" cx="46.25" cy="20.82" r="2.7" fill="#E8EEF5"/>
+                            </svg>
+                            <div class="gtext"><b data-power>57</b><span>KW</span><em>功率</em></div>
+                          </div>
+                        </div>
+                        <div class="cl-trip">
+                          <div class="trip-h"><span>本次</span><span class="live">进行中</span></div>
+                          <div class="route">
+                            <svg viewBox="0 0 120 58" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                              <path d="M8 46 C 22 44, 26 30, 40 32 S 58 44, 72 34 S 96 18, 112 22" fill="none" stroke="#4C8DFF" stroke-width="5" stroke-linecap="round" opacity=".18"/>
+                              <path d="M8 46 C 22 44, 26 30, 40 32 S 58 44, 72 34 S 96 18, 112 22" fill="none" stroke="#4C8DFF" stroke-width="2" stroke-linecap="round"/>
+                              <circle cx="8" cy="46" r="2" fill="#9BAABA" opacity=".85"/>
+                              <circle cx="112" cy="22" r="2.7" fill="#4C8DFF"/>
+                            </svg>
+                          </div>
+                          <div class="tgrid">
+                            <div class="tg"><span>本次</span><b>12.4<em>km</em></b></div>
+                            <div class="tg"><span>用时</span><b>18:42</b></div>
+                            <div class="tg"><span>均速</span><b>40<em>km/h</em></b></div>
+                            <div class="tg"><span>朝向</span><b>东北</b></div>
+                            <div class="tg"><span>最高</span><b>118<em>km/h</em></b></div>
+                            <div class="tg"><span>总里程</span><b>3862<em>km</em></b></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="cl-tells">
+                        <span class="tc"><i></i>🔒 落锁</span>
+                        <span class="tc cyan"><i></i>❄ 空调</span>
+                        <span class="tc"><i></i>车机在线</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="page" data-page="control" aria-label="控制">
+                    <div class="ph">
+                      <div>
+                        <h3>控制</h3>
+                        <div class="sub">按钮可用性跟随连接与安全闸门；车机状态显示最后一次读到的值</div>
+                      </div>
+                      <span class="pill t-good"><b>车机在线</b></span>
+                    </div>
+
+                    <div class="pills scroll">
+                      <span class="pill t-good" id="pillLock">门锁 已落锁</span>
+                      <span class="pill t-mid">档位 P</span>
+                      <span class="pill t-mid" id="pillTrunk">后备箱 关</span>
+                      <span class="pill t-mid" id="pillFrunk">前备箱 关</span>
+                      <span class="pill t-mid">充电口 关</span>
+                      <span class="pill t-info">空调 运行</span>
+                      <span class="pill t-mid">车内 有人</span>
+                      <span class="pill t-mid" id="pillCharge">充电 未连接</span>
+                      <span class="pill t-mid" id="pillUpdated">更新 14:32:05</span>
+                    </div>
+
+                    <div class="hint t-info">当前未插充电枪：充电启停与上限设置不可用</div>
+
+                    <div class="coll open" id="collLock">
+                      <button type="button" class="coll-h" aria-expanded="true">
+                        <div><b>车锁与舱盖</b><span id="sumLock">已落锁 · 后备箱关 · 前备箱关</span></div>
+                        <i>▾</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="tile-grid">
+                          <button type="button" class="tile dis" id="ctlUnlock">
+                            <span class="tx"><b>解锁</b><em id="ctlUnlockEm">已经解锁</em></span>
+                          </button>
+                          <button type="button" class="tile tone-info" id="ctlLock">
+                            <span class="tx"><b>落锁</b><em id="ctlLockEm"></em></span>
+                            <span class="dot"></span>
+                          </button>
+                          <button type="button" class="tile tone-info" id="ctlTrunkOpen">
+                            <span class="tx"><b>开后备箱</b><em id="ctlTrunkOpenEm"></em></span>
+                            <span class="dot"></span>
+                          </button>
+                          <button type="button" class="tile dis" id="ctlTrunkClose">
+                            <span class="tx"><b>关后备箱</b><em id="ctlTrunkCloseEm">后备箱已关</em></span>
+                          </button>
+                          <button type="button" class="tile tone-info" id="ctlFrunkOpen">
+                            <span class="tx"><b>开前备箱</b><em id="ctlFrunkOpenEm"></em></span>
+                            <span class="dot"></span>
+                          </button>
+                          <button type="button" class="tile tone-info">
+                            <span class="tx"><b>唤醒整车</b></span>
+                            <span class="dot"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll" id="collLight">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>灯光与车窗</b><span>车机 · 就绪</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="tile-grid">
+                          <button type="button" class="tile tone-info"><span class="tx"><b>闪灯</b></span><span class="badge">车机</span><span class="dot"></span></button>
+                          <button type="button" class="tile tone-info"><span class="tx"><b>鸣笛</b></span><span class="badge">车机</span><span class="dot"></span></button>
+                          <button type="button" class="tile tone-info"><span class="tx"><b>车窗通风</b></span><span class="badge">车机</span><span class="dot"></span></button>
+                          <button type="button" class="tile tone-info"><span class="tx"><b>车窗关闭</b></span><span class="badge">车机</span><span class="dot"></span></button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll" id="collClimate">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>空调</b><span>运行中 · 22.0°C · 车内 24.6°C · AUTO</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="tile-grid">
+                          <button type="button" class="tile tone-info"><span class="tx"><b>开空调</b><em>空调已运行</em></span><span class="badge">车机</span></button>
+                          <button type="button" class="tile tone-info"><span class="tx"><b>关空调</b></span><span class="badge">车机</span><span class="dot"></span></button>
+                          <button type="button" class="tile tone-info"><span class="tx"><b>AUTO</b><em>已是 AUTO</em></span><span class="badge">车机</span></button>
+                          <button type="button" class="tile tone-info"><span class="tx"><b>手动风量</b></span><span class="badge">车机</span><span class="dot"></span></button>
+                        </div>
+                        <div class="panel">
+                          <div class="panel-h"><div><b>目标温度</b><span>车内 24.6°C · 设定 22.0°C</span></div></div>
+                          <div class="bigval">22.0 °C</div>
+                          <div class="range"><i style="width:44%"></i></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll" id="collCharge">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>充电</b><span>未连接 · 上限 80%</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="tile-grid">
+                          <button type="button" class="tile dis"><span class="tx"><b>开始充电</b><em>未插充电枪</em></span><span class="badge">车机</span></button>
+                          <button type="button" class="tile dis"><span class="tx"><b>停止充电</b><em>当前没在充电</em></span><span class="badge">车机</span></button>
+                          <button type="button" class="tile tone-info"><span class="tx"><b>充电口开</b></span><span class="badge">车机</span><span class="dot"></span></button>
+                          <button type="button" class="tile dis"><span class="tx"><b>充电口关</b><em>充电口已关</em></span><span class="badge">车机</span></button>
+                        </div>
+                        <div class="panel">
+                          <div class="panel-h"><div><b>充电上限</b><span>车辆当前上限 80%</span></div></div>
+                          <div class="bigval">80 %</div>
+                          <div class="range"><i style="width:60%"></i></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll" id="collSentry">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>驻车安全</b><span>哨兵关闭</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="tile-grid">
+                          <button type="button" class="tile tone-info"><span class="tx"><b>哨兵开</b></span><span class="badge">车机</span><span class="dot"></span></button>
+                          <button type="button" class="tile tone-info"><span class="tx"><b>哨兵关</b><em>哨兵已关闭</em></span><span class="badge">车机</span></button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll" id="collCar">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>车辆详情</b><span>上海市黄浦区人民大道 200 号</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="panel tight">
+                          <div class="kv"><span>经纬度</span><b>31.23042, 121.47370</b></div>
+                          <div class="kv"><span>位置</span><b class="good">上海市黄浦区人民大道 200 号</b></div>
+                          <div class="note-inline">坐标来源：车机 WGS-84 → 高德 GCJ-02</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="slabel">最近命令<small>实测延迟</small></div>
+                    <div class="panel tight">
+                      <div id="ctlCmds">
+                        <div class="cmdrow"><span>✓ 解锁 · 车门</span><span class="ms">118 ms</span></div>
+                        <div class="cmdrow"><span>✓ 开空调 · 22.0°C</span><span class="ms">164 ms</span></div>
+                        <div class="cmdrow"><span>✓ 落锁 · 全部车门</span><span class="ms">96 ms</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="page" data-page="stats" aria-label="统计">
+                    <div class="ph">
+                      <div>
+                        <h3>统计</h3>
+                        <div class="sub">停在「仪表」或本页时持续采样，本次启动内全量保留</div>
+                      </div>
+                      <span class="pill t-data" id="statPoints">214/214 点</span>
+                    </div>
+
+                    <div class="slabel">行驶曲线<small>折叠态看数字，点开看全程趋势</small></div>
+
+                    <div class="coll open" id="collSpeed">
+                      <button type="button" class="coll-h" aria-expanded="true">
+                        <div><b>车速</b><span>均值 40 · 峰值 118 · 当前 116 km/h</span></div>
+                        <i>▾</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="lc">
+                          <div class="lc-head"><span class="lc-title">车速</span><span class="lc-val"><b>116.0</b>km/h</span></div>
+                          <svg viewBox="0 0 320 84" preserveAspectRatio="none" aria-label="车速曲线">
+                            <defs>
+                              <linearGradient id="lcFade" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0" stop-color="#4C8DFF" stop-opacity=".22"/>
+                                <stop offset="1" stop-color="#4C8DFF" stop-opacity="0"/>
+                              </linearGradient>
+                            </defs>
+                            <line class="gridline" x1="0" y1="1" x2="320" y2="1"/>
+                            <line class="gridline" x1="0" y1="42" x2="320" y2="42"/>
+                            <line class="gridline" x1="0" y1="83" x2="320" y2="83"/>
+                            <path d="M6 70 L26 66 L44 68 L62 57 L80 59 L98 48 L116 52 L134 40 L152 42 L170 30 L188 33 L206 24 L224 29 L242 17 L260 21 L278 13 L296 19 L314 15 L314 84 L6 84 Z" fill="url(#lcFade)"/>
+                            <path id="statsLine" d="M6 70 L26 66 L44 68 L62 57 L80 59 L98 48 L116 52 L134 40 L152 42 L170 30 L188 33 L206 24 L224 29 L242 17 L260 21 L278 13 L296 19 L314 15"
+                                  fill="none" stroke="#4C8DFF" stroke-width="2" vector-effect="non-scaling-stroke"
+                                  pathLength="100" stroke-dasharray="100" stroke-dashoffset="0" stroke-linecap="round"/>
+                            <circle cx="314" cy="15" r="7" fill="rgba(76,141,255,.25)"/>
+                            <circle cx="314" cy="15" r="3" fill="#4C8DFF"/>
+                          </svg>
+                          <div class="lc-foot">214 点 · 区间 18.0 ~ 118.0 km/h</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll" id="collPowerChart">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>功率</b><span>均值 62.4 · 峰值 156.0 · 当前 86.0 kW</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="lc">
+                          <div class="lc-head"><span class="lc-title">功率</span><span class="lc-val"><b>86.0</b>kW</span></div>
+                          <svg viewBox="0 0 320 84" preserveAspectRatio="none" aria-label="功率曲线">
+                            <defs>
+                              <linearGradient id="lcFadeP" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0" stop-color="#FF9800" stop-opacity=".22"/>
+                                <stop offset="1" stop-color="#FF9800" stop-opacity="0"/>
+                              </linearGradient>
+                            </defs>
+                            <line class="gridline" x1="0" y1="1" x2="320" y2="1"/>
+                            <line class="gridline" x1="0" y1="42" x2="320" y2="42"/>
+                            <line class="gridline" x1="0" y1="83" x2="320" y2="83"/>
+                            <path d="M6 52 L28 44 L48 49 L68 32 L88 36 L108 20 L128 28 L148 13 L168 22 L188 9 L208 18 L228 27 L248 42 L268 48 L288 64 L308 70 L308 84 L6 84 Z" fill="url(#lcFadeP)"/>
+                            <path d="M6 52 L28 44 L48 49 L68 32 L88 36 L108 20 L128 28 L148 13 L168 22 L188 9 L208 18 L228 27 L248 42 L268 48 L288 64 L308 70"
+                                  fill="none" stroke="#FF9800" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+                            <circle cx="308" cy="70" r="7" fill="rgba(255,152,0,.25)"/>
+                            <circle cx="308" cy="70" r="3" fill="#FF9800"/>
+                          </svg>
+                          <div class="lc-foot">214 点 · 区间 -34.0 ~ 156.0 kW</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="slabel">行驶轨迹<small>行驶中每 10 秒一个点 · 存本机，磁盘保留最近 200 条</small></div>
+                    <div class="tr-chips">
+                      <button type="button" class="tr-chip on">10-24 14:32 · 12.6 km</button>
+                      <button type="button" class="tr-chip">10-24 09:18 · 8.2 km</button>
+                      <button type="button" class="tr-chip">10-23 18:20 · 21.4 km</button>
+                    </div>
+
+                    <div class="panel">
+                      <div class="trip-head">
+                        <span>10-24 14:32 · 共 3 条记录</span>
+                        <button type="button" class="pill t-mid" id="overlayPill">叠加全部</button>
+                      </div>
+                      <div class="trip-grid">
+                        <div class="trip-cell"><span>距离·GPS</span><b>12.6 km</b></div>
+                        <div class="trip-cell"><span>时长</span><b>19分</b></div>
+                        <div class="trip-cell"><span>最高</span><b>118 km/h</b></div>
+                        <div class="trip-cell"><span>轨迹点</span><b>214</b></div>
+                      </div>
+
+                      <div class="map" aria-label="本次行程地图">
+                      <svg viewBox="0 0 320 300" preserveAspectRatio="none">
+                        <rect width="320" height="300" fill="#0A1015"/>
+                        <g fill="#101922">
+                          <rect x="14" y="18" width="70" height="54" rx="4"/>
+                          <rect x="102" y="10" width="58" height="44" rx="4"/>
+                          <rect x="186" y="16" width="66" height="50" rx="4"/>
+                          <rect x="266" y="8" width="48" height="64" rx="4"/>
+                          <rect x="12" y="96" width="54" height="60" rx="4"/>
+                          <rect x="86" y="78" width="48" height="52" rx="4"/>
+                          <rect x="156" y="82" width="52" height="44" rx="4"/>
+                          <rect x="230" y="90" width="44" height="62" rx="4"/>
+                          <rect x="18" y="182" width="62" height="48" rx="4"/>
+                          <rect x="100" y="168" width="58" height="54" rx="4"/>
+                          <rect x="178" y="158" width="50" height="48" rx="4"/>
+                          <rect x="248" y="176" width="58" height="44" rx="4"/>
+                          <rect x="30" y="252" width="72" height="38" rx="4"/>
+                          <rect x="120" y="240" width="64" height="46" rx="4"/>
+                          <rect x="206" y="234" width="54" height="42" rx="4"/>
+                        </g>
+                        <rect x="176" y="196" width="46" height="40" rx="5" fill="#0D1A15"/>
+                        <g stroke="#1C2A36" stroke-width="11" stroke-linecap="round">
+                          <path d="M-8 86 L328 76"/>
+                          <path d="M0 232 L320 224"/>
+                          <path d="M78 -8 L92 308"/>
+                          <path d="M240 -8 L252 308"/>
+                        </g>
+                        <g stroke="#22333F" stroke-width="1">
+                          <path d="M-8 86 L328 76"/><path d="M0 232 L320 224"/><path d="M78 -8 L92 308"/><path d="M240 -8 L252 308"/>
+                        </g>
+                        <g fill="#4E5D6B" font-size="7.5" font-family="Inter,PingFang SC,sans-serif" letter-spacing=".04em">
+                          <text x="128" y="82">文三路</text>
+                          <text x="132" y="228">天目山路</text>
+                          <text x="246" y="120">教工路</text>
+                          <text x="16" y="148">西湖区</text>
+                          <text x="180" y="206">武林公园</text>
+                        </g>
+                        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M58 246 L78 226 L96 210 L112 196 L130 186 L148 168 L164 158 L180 140 L196 132 L212 112 L230 104 L244 86 L258 64" stroke="#4C8DFF" stroke-width="10" opacity=".14"/>
+                          <path d="M58 246 L78 226 L96 210 L112 196 L130 186 L148 168 L164 158" stroke="#38BDF8" stroke-width="3"/>
+                          <path d="M164 158 L180 140 L196 132 L212 112 L230 104 L244 86" stroke="#FFB300" stroke-width="3"/>
+                          <path d="M244 86 L258 64" stroke="#FF5252" stroke-width="3"/>
+                        </g>
+                        <circle cx="58" cy="246" r="8" fill="rgba(59,196,107,.18)"/>
+                        <circle cx="58" cy="246" r="4" fill="#3BC46B" stroke="#08110C" stroke-width="1.4"/>
+                        <circle cx="258" cy="64" r="8" fill="rgba(240,74,80,.18)"/>
+                        <circle cx="258" cy="64" r="4" fill="#F04A50" stroke="#16090A" stroke-width="1.4"/>
+                      </svg>
+                      </div>
+                    </div>
+
+                    <div class="note-inline" id="statsNote">采样间隔：行驶 250 ms / 停车 600 ms（车速与档位），电量与温度 2.5 s。车辆数据全部来自蓝牙直连，仅地图底图走网络。</div>
+                    <button type="button" class="pill on" id="clearChart">清空曲线</button>
+                  </div>
+
+                  <div class="page" data-page="tools" aria-label="工具">
+                    <div class="ph">
+                      <div>
+                        <h3>工具</h3>
+                        <div class="sub">小工具合集：快捷启动 · 事故处理 · 行车记录仪 · 零百计时 · 车机皮肤</div>
+                      </div>
+                    </div>
+
+                    <div class="subtabs" id="toolTabs">
+                      <button type="button" class="stab on" data-sub="quick">快捷启动</button>
+                      <button type="button" class="stab" data-sub="accident">事故处理</button>
+                      <button type="button" class="stab" data-sub="dashcam">行车记录仪</button>
+                      <button type="button" class="stab" data-sub="accel">零百计时</button>
+                      <button type="button" class="stab" data-sub="wraps">车机皮肤</button>
+                    </div>
+
+                    <div class="toolview on" data-tool="quick">
+                      <div class="slabel">快捷启动<small>一键拉起常用 App</small></div>
+                      <div class="panel">
+                        <div class="tile sel static"><span class="tx"><b>高德地图</b><em>导航 · 实时路况 · 找充电站</em></span><span class="dot"></span></div>
+                        <div class="tile sel static"><span class="tx"><b>支付宝</b><em>付款 · 出行 · 本地生活</em></span><span class="dot"></span></div>
+                        <div class="tile sel static"><span class="tx"><b>微信</b><em>社交 · 扫码 · 传文件</em></span><span class="dot"></span></div>
+                        <div class="tile sel static"><span class="tx"><b>美团</b><em>找美食 · 订酒店 · 团购</em></span><span class="dot"></span></div>
+                      </div>
+                    </div>
+
+                    <div class="toolview" data-tool="accident">
+                      <div class="slabel">事故处理<small>按 1→6 步做；每步只做一件事</small></div>
+
+                      <div class="bigpanel">
+                        <h4>第 1 步 · 先保命</h4>
+                        <div class="bigline">开双闪，人先离开车道</div>
+                        <div class="bigline">三角牌：城市路 50 米外，高速 150 米外</div>
+                        <div class="bigline">车上所有人站到护栏外，别留在车里理论</div>
+                      </div>
+
+                      <div class="bigpanel">
+                        <h4>第 2 步 · 有没有人受伤</h4>
+                        <div class="tile sel static"><span class="tx"><b>有人受伤 → 120</b></span><span class="dot tone-bad"></span></div>
+                        <div class="cap">有受伤：先 120，再 122，尽量别动车。没人受伤就直接往下走第 3 步。</div>
+                      </div>
+
+                      <div class="bigpanel">
+                        <h4>第 3 步 · 打 122，把位置说清楚</h4>
+                        <div class="loc-title">杭州市西湖区 · 文三路 478 号</div>
+                        <div class="loc-meta">GPS 30.27410, 120.15510 · ±12m · 高德来源</div>
+                        <div class="tile-row">
+                          <div class="tile sel static"><span class="tx"><b>复制位置</b></span><span class="dot tone-bad"></span></div>
+                          <div class="tile plain fixed96 static"><span class="tx"><b>刷新</b></span><span class="dot"></span></div>
+                        </div>
+                        <div class="tile sel static"><span class="tx"><b>拨打 122</b></span><span class="dot tone-bad"></span></div>
+                      </div>
+
+                      <div class="bigpanel">
+                        <h4>第 4 步 · 拍照取证（2/6 项 · 共 3 张）</h4>
+                        <div class="lbar"><i></i></div>
+                        <div class="tile sel static">
+                          <span class="tx"><b>导出取证清单 PDF</b><em>清单 + 现场照片 + 证件照 + 个人信息，一键发给保险/交警</em></span>
+                          <span class="dot"></span>
+                        </div>
+
+                        <div class="photo-task done">
+                          <div class="photo-head">
+                            <span class="mark">✓</span>
+                            <div class="pt"><b>全景 · 车头方向</b><span>站得远一点，把两车、车牌、车道线和周围路牌建筑一起拍进去</span></div>
+                          </div>
+                          <div class="photo-row">
+                            <div class="shots"><span class="shot"></span><span class="shot" style="background:linear-gradient(140deg,#2A3B4E,#121A23)"></span></div>
+                            <div class="tile mini static"><span class="tx"><b>拍照</b></span><span class="dot"></span></div>
+                            <div class="tile mini plain static"><span class="tx"><b>选图</b></span><span class="dot"></span></div>
+                          </div>
+                        </div>
+
+                        <div class="photo-task done">
+                          <div class="photo-head">
+                            <span class="mark">✓</span>
+                            <div class="pt"><b>全景 · 车尾方向</b><span>从对面 45° 拍两车的相对位置和停止状态</span></div>
+                          </div>
+                          <div class="photo-row">
+                            <div class="shots"><span class="shot" style="background:linear-gradient(140deg,#233A45,#0E1A20)"></span></div>
+                            <div class="tile mini static"><span class="tx"><b>拍照</b></span><span class="dot"></span></div>
+                            <div class="tile mini plain static"><span class="tx"><b>选图</b></span><span class="dot"></span></div>
+                          </div>
+                        </div>
+
+                        <div class="photo-task">
+                          <div class="photo-head">
+                            <span class="mark">○</span>
+                            <div class="pt"><b>碰撞部位特写</b><span>贴近拍凹陷、划痕、掉漆，两张不同角度</span></div>
+                          </div>
+                          <div class="photo-row">
+                            <span class="none">还没拍</span>
+                            <div class="tile mini static"><span class="tx"><b>拍照</b></span><span class="dot"></span></div>
+                            <div class="tile mini plain static"><span class="tx"><b>选图</b></span><span class="dot"></span></div>
+                          </div>
+                        </div>
+
+                        <div class="photo-task">
+                          <div class="photo-head">
+                            <span class="mark">○</span>
+                            <div class="pt"><b>地面痕迹</b><span>刹车印、散落物、碎片位置（拍完再挪车）</span></div>
+                          </div>
+                          <div class="photo-row">
+                            <span class="none">还没拍</span>
+                            <div class="tile mini static"><span class="tx"><b>拍照</b></span><span class="dot"></span></div>
+                            <div class="tile mini plain static"><span class="tx"><b>选图</b></span><span class="dot"></span></div>
+                          </div>
+                        </div>
+
+                        <div class="photo-task">
+                          <div class="photo-head">
+                            <span class="mark">○</span>
+                            <div class="pt"><b>对方车牌与证件</b><span>车牌、行驶证、驾驶证、保险单（或电子保单页）</span></div>
+                          </div>
+                          <div class="photo-row">
+                            <span class="none">还没拍</span>
+                            <div class="tile mini static"><span class="tx"><b>拍照</b></span><span class="dot"></span></div>
+                            <div class="tile mini plain static"><span class="tx"><b>选图</b></span><span class="dot"></span></div>
+                          </div>
+                        </div>
+
+                        <div class="photo-task">
+                          <div class="photo-head">
+                            <span class="mark">○</span>
+                            <div class="pt"><b>本方损失与记录仪</b><span>自己车的损伤；确认记录仪已保存该时段（SavedClips）</span></div>
+                          </div>
+                          <div class="photo-row">
+                            <span class="none">还没拍</span>
+                            <div class="tile mini static"><span class="tx"><b>拍照</b></span><span class="dot"></span></div>
+                            <div class="tile mini plain static"><span class="tx"><b>选图</b></span><span class="dot"></span></div>
+                          </div>
+                        </div>
+
+                        <div class="hint t-warn">还差 4 项：碰撞部位特写、地面痕迹、对方车牌与证件、本方损失与记录仪</div>
+                        <div class="tile-row">
+                          <div class="tile plain static"><span class="tx"><b>复制取证清单</b></span><span class="dot"></span></div>
+                          <div class="tile tone-warn static"><span class="tx"><b>清空本页清单</b></span><span class="dot"></span></div>
+                        </div>
+                        <div class="cap">照片存到相册 Pictures/TeslaLink；同一类可以拍多张，点缩略图看大图，大图里才能「从清单移除」。移除和清空都只动本页列表，相册里的文件不删。用别的相机拍的，点左边的 ○ 手动记为已完成。</div>
+                      </div>
+
+                      <div class="bigpanel">
+                        <h4>第 5 步 · 拍完再挪车</h4>
+                        <div class="bigline">责任清楚、能开动：拍照后把车挪到路边，别堵主路</div>
+                        <div class="bigline">有争议或有伤：保持现场，等交警</div>
+                        <div class="bigline">「交管 12123」App 可在线快处、生成协议书</div>
+                      </div>
+
+                      <div class="bigpanel">
+                        <h4>第 6 步 · 报保险（48 小时内）</h4>
+                        <div class="hotline on">
+                          <div class="hm"><b>人保财险 PICC</b><span>你选的保险公司 · 48 小时内报案</span></div>
+                          <code>95518</code>
+                        </div>
+                        <div class="hotline">
+                          <div class="hm"><b>Tesla 道路救援</b></div>
+                          <code>4009100707</code>
+                        </div>
+                        <div class="coll">
+                          <button type="button" class="coll-h" aria-expanded="false">
+                            <div><b>其它保险公司号码</b><span>6 家 · 报对方保险时也从这里找</span></div>
+                            <i>▸</i>
+                          </button>
+                          <div class="coll-b">
+                            <div class="panel">
+                              <div class="hotline"><div class="hm"><b>平安产险</b></div><code>95511</code></div>
+                              <div class="hotline"><div class="hm"><b>太平洋保险</b></div><code>95500</code></div>
+                              <div class="hotline"><div class="hm"><b>国寿财险</b></div><code>95519</code></div>
+                              <div class="hotline"><div class="hm"><b>大地保险</b></div><code>95590</code></div>
+                              <div class="hotline"><div class="hm"><b>阳光财险</b></div><code>95510</code></div>
+                              <div class="hotline"><div class="hm"><b>中华联合财险</b></div><code>95585</code></div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="cap">特斯拉维修先联系服务中心或道路救援，再和保险定损对齐。</div>
+                      </div>
+
+                      <div class="coll">
+                        <button type="button" class="coll-h" aria-expanded="false">
+                          <div><b>其他号码</b><span>110 / 120 / 12122 等备用</span></div>
+                          <i>▸</i>
+                        </button>
+                        <div class="coll-b">
+                          <div class="panel">
+                            <div class="e-num"><span>122 · 交通事故报警</span><span class="pill t-mid">拨打</span></div>
+                            <div class="e-num"><span>110 · 公安报警</span><span class="pill t-mid">拨打</span></div>
+                            <div class="e-num"><span>120 · 急救</span><span class="pill t-mid">拨打</span></div>
+                            <div class="e-num"><span>12122 · 高速公路救援</span><span class="pill t-mid">拨打</span></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="toolview" data-tool="dashcam">
+                      <div class="slabel">行车记录仪<small>U 盘经 OTG 插手机 · 6 机位 · RecentClips 平铺 + Sentry/Saved 每事件一目录</small></div>
+
+                      <div class="panel">
+                        <div class="pills">
+                          <span class="pill t-good">U 盘已连接</span>
+                          <span class="pill t-data">5 个事件</span>
+                        </div>
+                        <div class="tile-row">
+                          <div class="tile plain static"><span class="tx"><b>重新扫描</b><em>U 盘里加了新事件、或换了盘，点这里重列（不重新选目录）</em></span><span class="dot"></span></div>
+                          <div class="tile plain static"><span class="tx"><b>换 U 盘</b></span><span class="dot"></span></div>
+                        </div>
+                      </div>
+
+                      <div class="subtabs" id="dcFilters">
+                        <button type="button" class="stab on" data-filter="all">全部 5</button>
+                        <button type="button" class="stab" data-filter="impact">有加速度 1</button>
+                        <button type="button" class="stab" data-filter="Sentry">哨兵 2</button>
+                        <button type="button" class="stab" data-filter="Saved">手动 1</button>
+                        <button type="button" class="stab" data-filter="Recent">滚动 2</button>
+                      </div>
+
+                      <div class="ev-list" id="dcList">
+                        <div class="evrow sel" role="button" tabindex="0" data-src="Sentry" data-impact="1" data-city="杭州" data-trig="10-24 15:31:58" data-pos="30.2741, 120.1551" data-reason="前向碰撞" data-cam="#1（车内部编号，与六路顺序不一定对应）" aria-expanded="true">
+                          <div class="er-h"><span class="tm">10-24 15:32</span><span class="src">Sentry</span><span class="imp">碰撞</span><span class="caret">▲</span></div>
+                          <div class="addr">杭州市西湖区 · 文三路</div>
+                          <div class="meta">约 1 分钟 · 2 个分段 · 4 机位 · 前向碰撞</div>
+                        </div>
+
+                        <div class="dc-expand" id="dcExpand">
+                          <div class="panel tight" id="dcEvJson">
+                            <div class="kv"><span>城市</span><b id="dcCity">杭州</b></div>
+                            <div class="kv"><span>车记触发时刻</span><b class="warn" id="dcTrig">10-24 15:31:58</b></div>
+                            <div class="kv"><span>车自报位置</span><b id="dcPos">30.2741, 120.1551</b></div>
+                            <div class="kv"><span>触发原因</span><b class="bad" id="dcReason">前向碰撞</b></div>
+                            <div class="kv"><span>event.json 机位编号</span><b id="dcCam">#1（车内部编号，与六路顺序不一定对应）</b></div>
+                            <div class="tile plain static"><span class="tx"><b>在高德地图看这个位置</b></span><span class="dot"></span></div>
+                          </div>
+
+                          <div class="camtxt" id="dcCamCount">机位（在播 4/4，上限 4）</div>
+                          <div class="subtabs" id="dcPicker">
+                            <button type="button" class="stab on" data-pcam="front">前视</button>
+                            <button type="button" class="stab on" data-pcam="back">后视</button>
+                            <button type="button" class="stab on" data-pcam="left_repeater">左后侧</button>
+                            <button type="button" class="stab on" data-pcam="right_repeater">右后侧</button>
+                            <button type="button" class="stab" data-pcam="left_pillar">左B柱</button>
+                            <button type="button" class="stab" data-pcam="right_pillar">右B柱</button>
+                          </div>
+
+                          <div class="camgrid" id="dcCams">
+                            <div class="cam" data-cam="front">
+                              <span class="clabel">前视</span>
+                              <span class="cspeed"><b>42</b><em>km/h</em><svg viewBox="0 0 44 22" aria-hidden="true"><polyline points="0,17 6,15 12,16 18,11 24,12 30,8 36,9 44,5" fill="none" stroke="#38BDF8" stroke-width="2"/><line x1="0" y1="13" x2="44" y2="13" stroke="rgba(255,255,255,.4)" stroke-width="1"/></svg></span>
+                              <span class="ctime">15:32:14</span>
+                            </div>
+                            <div class="cam" data-cam="back">
+                              <span class="clabel">后视</span>
+                              <span class="ctime">15:32:14</span>
+                            </div>
+                            <div class="cam" data-cam="left_repeater">
+                              <span class="clabel">左后侧</span>
+                              <span class="ctime">15:32:14</span>
+                            </div>
+                            <div class="cam" data-cam="right_repeater">
+                              <span class="clabel">右后侧</span>
+                              <span class="ctime">15:32:14</span>
+                            </div>
+                            <div class="cam" data-cam="left_pillar" style="display:none">
+                              <span class="clabel">左B柱</span>
+                              <span class="ctime">15:32:14</span>
+                            </div>
+                            <div class="cam" data-cam="right_pillar" style="display:none">
+                              <span class="clabel">右B柱</span>
+                              <span class="ctime">15:32:14</span>
+                            </div>
+                          </div>
+
+                          <div class="pills">
+                            <span class="pill t-mid">播放器：就绪</span>
+                            <span class="pill t-mid">总长 0:01:00</span>
+                            <span class="pill t-mid">⛶ 全屏</span>
+                          </div>
+
+                          <div class="pills nowrap">
+                            <button type="button" class="pill on" id="dcPlay">播放</button>
+                            <button type="button" class="pill on" data-seek="-30">−30 秒</button>
+                            <button type="button" class="pill on" data-seek="30">+30 秒</button>
+                            <button type="button" class="pill on" data-seek="25">⚑ 跳到触发时刻</button>
+                            <button type="button" class="pill on" data-seek="0">回到开头</button>
+                          </div>
+                          <div class="prog-line" id="dcProgress">进度 0:12 / 1:00 · 画面时间 15:32:14</div>
+                          <div class="slider"><i id="dcFill"></i></div>
+
+                          <div class="hint t-mid">机位在上方小丸子里自选，最多同时 4 路（前视近 5.4MP，再多手机解码不动）。车速叠加来自本 app 蓝牙采样——只有 app 在跑期间录下的画面才有数据；MP4 实测只有视频轨、没有隐藏数据轨，所以只能这么叠。</div>
+
+                          <div class="coll">
+                            <button type="button" class="coll-h" aria-expanded="false">
+                              <div><b>导出 / 剪辑</b><span>合成单个 mp4 · 1 路全幅 / 2-4 路 2×2 · 左下角带时间码 · 存到相册 Movies/TeslaLink</span></div>
+                              <i>▸</i>
+                            </button>
+                            <div class="coll-b">
+                              <div class="panel">
+                                <div class="pills" id="exportCams">
+                                  <button type="button" class="stab on" data-ecam="front">前视 2</button>
+                                  <button type="button" class="stab on" data-ecam="back">后视 2</button>
+                                  <button type="button" class="stab on" data-ecam="left_repeater">左后侧 2</button>
+                                  <button type="button" class="stab on" data-ecam="right_repeater">右后侧 2</button>
+                                </div>
+                                <div class="hint t-mid">4 路=2×2，前视原生分辨率作主格，码率拉满不缩小；左下角烙墙钟时间码。导出走 解码→合成→高码率重编码，速度约为实时的 1/2~1/3，比拷贝慢是物理的——每帧都要解码、合成、再编码。</div>
+                                <div class="tile-row" style="justify-content:space-around">
+                                  <div class="stepper">
+                                    <span class="eyebrow">起始段</span>
+                                    <div class="srow">
+                                      <button type="button" class="pill on" data-from="-1">−</button>
+                                      <span class="num" id="fromNum">1/2</span>
+                                      <button type="button" class="pill on" data-from="1">+</button>
+                                    </div>
+                                    <span class="t" id="fromTime">15:32:02</span>
+                                  </div>
+                                  <div class="stepper">
+                                    <span class="eyebrow">结束段</span>
+                                    <div class="srow">
+                                      <button type="button" class="pill on" data-to="-1">−</button>
+                                      <span class="num" id="toNum">2/2</span>
+                                      <button type="button" class="pill on" data-to="1">+</button>
+                                    </div>
+                                    <span class="t" id="toTime">15:32:58</span>
+                                  </div>
+                                </div>
+                                <div class="tile sel static"><span class="tx"><b id="exportLabel">导出 2 段 · 4 路（含时间码）</b></span><span class="dot"></span></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="evrow" role="button" tabindex="0" data-src="Saved" data-impact="0" data-city="杭州" data-trig="10-24 09:18:44" data-pos="30.2874, 120.0789" data-reason="手动保存" data-cam="#2（车内部编号，与六路顺序不一定对应）" aria-expanded="false">
+                          <div class="er-h"><span class="tm">10-24 09:18</span><span class="src">Saved</span><span class="caret">▼</span></div>
+                          <div class="addr">杭州市西湖区 · 文一西路</div>
+                          <div class="meta">约 1 分钟 · 2 个分段 · 4 机位 · 手动保存</div>
+                        </div>
+
+                        <div class="evrow" role="button" tabindex="0" data-src="Sentry" data-impact="0" data-city="杭州" data-trig="10-23 21:07:12" data-pos="30.2084, 120.2103" data-reason="哨兵模式" data-cam="#1（车内部编号，与六路顺序不一定对应）" aria-expanded="false">
+                          <div class="er-h"><span class="tm">10-23 21:07</span><span class="src">Sentry</span><span class="caret">▼</span></div>
+                          <div class="addr">杭州市滨江区 · 江南大道</div>
+                          <div class="meta">约 1 分钟 · 1 个分段 · 4 机位 · 哨兵模式</div>
+                        </div>
+
+                        <div class="evrow" role="button" tabindex="0" data-src="Recent" data-impact="0" data-city="" data-trig="" data-pos="" data-reason="滚动录像" data-cam="" aria-expanded="false">
+                          <div class="er-h"><span class="tm">10-23 18:20</span><span class="src">Recent</span><span class="caret">▼</span></div>
+                          <div class="addr no">地址未记录</div>
+                          <div class="meta">约 2 分钟 · 3 个分段 · 4 机位 · 滚动录像</div>
+                        </div>
+
+                        <div class="evrow" role="button" tabindex="0" data-src="Recent" data-impact="0" data-city="" data-trig="" data-pos="" data-reason="滚动录像" data-cam="" aria-expanded="false">
+                          <div class="er-h"><span class="tm">10-22 12:44</span><span class="src">Recent</span><span class="caret">▼</span></div>
+                          <div class="addr no">地址未记录</div>
+                          <div class="meta">约 1 分钟 · 2 个分段 · 4 机位 · 滚动录像</div>
+                        </div>
+                      </div>
+
+                      <div class="coll">
+                        <button type="button" class="coll-h" aria-expanded="false">
+                          <div><b>MP4 体检（前视第一段）</b><span>单视频轨、无数据轨 · 车速只能靠本 app 蓝牙采样叠加</span></div>
+                          <i>▸</i>
+                        </button>
+                        <div class="coll-b">
+                          <div class="panel tight">
+                            <div class="kv"><span>顶层结构</span><b>ftyp → moov → mdat</b></div>
+                            <div class="kv"><span>轨道 #1</span><b>vide · avc1 · 1280x960</b></div>
+                            <div class="kv"><span>轨道 #2</span><b>soun · mp4a</b></div>
+                            <div class="kv"><span>udta 自定义容器</span><b>无</b></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="toolview" data-tool="accel">
+                      <div class="slabel">零百成绩测试<small>蓝牙车速采样 · 与仪表联动 · 封闭场地使用</small></div>
+
+                      <div class="panel">
+                        <button type="button" class="tile sel" id="accelStart" style="width:100%">
+                          <span class="tx"><b>开始零百测试</b><em>待命后从静止起步即自动计时，到 100 km/h 停表</em></span>
+                          <span class="dot"></span>
+                        </button>
+                        <div id="accelRun" style="display:none;flex-direction:column;gap:10px">
+                          <div class="run-state" id="accelState">待命中：车辆停稳后起步即自动开始</div>
+                          <button type="button" class="tile tone-warn" id="accelCancel" style="width:100%">
+                            <span class="tx"><b>取消测试</b></span><span class="dot"></span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div id="accelResults" style="display:flex;flex-direction:column">
+                        <div class="res-row"><div class="res-meta"><b>#3 · 15:12:06</b><span>0-60 2.05 s · 60-100 2.27 s · 峰值 214 kW · SOC 78%→77%</span></div><strong>4.32 s</strong></div>
+                        <div class="res-row"><div class="res-meta"><b>#2 · 10-23 18:44</b><span>0-60 2.11 s · 60-100 2.40 s · 峰值 208 kW · SOC 64%→63%</span></div><strong>4.51 s</strong></div>
+                        <div class="res-row"><div class="res-meta"><b>#1 · 10-21 09:18</b><span>0-60 2.18 s · 60-100 2.50 s · 峰值 205 kW · SOC 88%→87%</span></div><strong>4.68 s</strong></div>
+                      </div>
+
+                      <div class="hint t-mid">计时来自 250 ms 车速流的线性插值，精度约 ±0.05 s；比车机 HUD 差一点，但零成本。</div>
+                    </div>
+
+                    <div class="toolview" data-tool="wraps">
+                      <div class="slabel">车机皮肤<small>U 盘根目录 Wraps · 玩具箱 → 喷漆车间 → Wraps</small></div>
+
+                      <div class="pills">
+                        <span class="pill t-good">U 盘已连接</span>
+                        <span class="pill t-data">3/10 张</span>
+                        <span class="pill t-good">全部可用</span>
+                      </div>
+
+                      <div class="tile static">
+                        <span class="tx"><b>换 U 盘 / 重新授权</b><em>要读写授权才能导入和删图（只给读也能看）</em></span>
+                        <span class="dot"></span>
+                      </div>
+
+                      <div class="tile-row">
+                        <div class="tile sel static"><span class="tx"><b>从相册导入</b><em>自动居中裁方 + 压到 512~1024 的 PNG</em></span><span class="dot"></span></div>
+                        <div class="tile plain static"><span class="tx"><b>重新扫描</b></span><span class="dot"></span></div>
+                      </div>
+
+                      <div class="wrap-row">
+                        <span class="wrap-thumb" style="--a:#213A5C;--b:#0E1B2D"></span>
+                        <span class="wrap-meta"><b>1.png</b><span>1024×1024 · 412 KB · 10-24 14:32</span></span>
+                        <span class="pill on">删除</span>
+                      </div>
+                      <div class="wrap-row">
+                        <span class="wrap-thumb" style="--a:#4A2F3C;--b:#1B1016"></span>
+                        <span class="wrap-meta"><b>2.png</b><span>1024×1024 · 798 KB · 10-24 14:31</span></span>
+                        <span class="pill on">删除</span>
+                      </div>
+                      <div class="wrap-row">
+                        <span class="wrap-thumb" style="--a:#234A3B;--b:#0D1C17"></span>
+                        <span class="wrap-meta"><b>3.png</b><span>1024×1024 · 188 KB · 10-24 14:30</span></span>
+                        <span class="pill on">删除</span>
+                      </div>
+
+                      <div class="coll">
+                        <button type="button" class="coll-h" aria-expanded="false">
+                          <div><b>皮肤规则（官方口径 + 你盘里实测）</b><span>3 张能上、0 张不行</span></div>
+                          <i>▸</i>
+                        </button>
+                        <div class="coll-b">
+                          <div class="rule">· U 盘根目录建 Wraps（大写 W），里面放 PNG，车机只认这个目录</div>
+                          <div class="rule">· 必须正方形，边长 512~1024 px，单张 ≤1 MB，最多 10 张</div>
+                          <div class="rule low">· 你这块盘里三张全是 1024×1024 RGBA PNG（188~798 KB），文件名车机不会改，那个 54978661417222145.png 是下载时自带的编号</div>
+                          <div class="rule">· 导入时本工具会：居中裁成正方形 → 按 1024/896/768/640/512 逐档压 PNG，取第一个不超 1 MB 的档位写入；原图短边不足 512 直接拒（放大没意义）</div>
+                          <div class="rule">· 应用：U 盘插回手套箱 → 车机 玩具箱 → 喷漆车间 → Wraps 页签；Tesla App 4.59+ 也能自己传（创作 → 车衣 → 上传），两条路都绕不开车机确认</div>
+                          <div class="rule" style="color:var(--warn)">· 删除是真删 U 盘上的文件，删前会二次确认；本工具不会动 TeslaCam 里的记录仪数据</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="page" data-page="settings" aria-label="设置">
+                    <div class="ph">
+                      <div>
+                        <h3>设置</h3>
+                        <div class="sub">连接、钥匙与本机数据；全部留在本机</div>
+                      </div>
+                    </div>
+
+                    <div class="slabel">连接车辆<small>纯蓝牙直连 · 日常（钥匙已入库）</small></div>
+                    <div class="set-pills">
+                      <span class="pill t-good">链路 已连接</span>
+                      <span class="pill t-good">钥匙 已配对</span>
+                      <span class="pill t-good">车机 在线</span>
+                    </div>
+
+                    <div class="coll">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>连接车辆 · 日常</b><span>钥匙已入库 · 打开 app 自动连接，平时不用动这里</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="panel">
+                          <div class="panel-h"><div><b>VIN</b><span>17 位，见车辆铭牌或行驶证</span></div></div>
+                          <div class="inp"><span>5YJ3E1EA7KFSAMPLE</span></div>
+                          <div class="tile-row">
+                            <div class="tile sel static"><span class="tx"><b>扫描并连接</b></span><span class="dot"></span></div>
+                            <div class="tile plain fixed96 static"><span class="tx"><b>断开</b></span><span class="dot"></span></div>
+                          </div>
+                        </div>
+                        <div class="tile tone-warn static"><span class="tx"><b>重看首次引导（清掉配对记录）</b><em>只重置界面引导状态：不动本机钥匙，也不会通知车辆</em></span><span class="dot"></span></div>
+                      </div>
+                    </div>
+
+                    <div class="coll">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>连接兜底</b><span>默认扫描发现 · 无需配置</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="panel">
+                          <div class="panel-h"><div><b>车辆 BLE 地址（MAC）</b><span>用 nRF Connect 在车旁看到车辆（名称 S…C）而本 app 扫不到时填写；保存后连接将跳过扫描直接拨号。</span></div></div>
+                          <div class="inp"><span class="empty">A0:B1:C2:D3:E4:F5</span></div>
+                          <div class="tile-row">
+                            <div class="tile sel static"><span class="tx"><b>保存并使用</b></span><span class="dot"></span></div>
+                            <div class="tile plain fixed110 static"><span class="tx"><b>清除</b></span><span class="dot"></span></div>
+                          </div>
+                        </div>
+                        <div class="panel">
+                          <div class="panel-h"><div><b>自定义 BLE 广播名</b><span>车辆广播名默认按 VIN 计算（S + SHA1 前 8 字节 + C），与你在 Tesla app 里改的昵称无关。</span></div></div>
+                          <div class="inp"><span class="empty">例如 Tesla Model 3（留空则不启用）</span></div>
+                          <div class="tile plain static"><span class="tx"><b>保存广播名</b></span><span class="dot"></span></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>高德 Key（通用）</b><span>已配置 · 尾号 …8F2A</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="panel">
+                          <div class="panel-h"><div><b>高德开放平台 Key</b><span>全 app 通用的一项配置，目前只影响一处：「工具 → 事故处理 → 我在哪」的逆地理编码（把 GPS 坐标翻译成中文地址）。统计页轨迹的高德底图走公开栅瓦，不需要 Key；车辆数据全程蓝牙直连，与这个 Key 无关。</span></div></div>
+                          <div class="inp"><span>a1b2c3d4e5f60718293a4b5c6d7e8f2a</span></div>
+                          <div class="note-inline">只要「Key」那一串，不需要「安全密钥」（那是 JS API 用的）。高德控制台「我的应用」里这把 Key 的绑定服务必须显示 Web服务；显示 Web端 / Android平台 的会报 10009 平台不匹配；不要勾选数字签名。</div>
+                          <div class="tile-row">
+                            <div class="tile sel static"><span class="tx"><b>保存 Key</b></span><span class="dot"></span></div>
+                            <div class="tile plain fixed110 static"><span class="tx"><b>清除</b></span><span class="dot"></span></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll open" id="collBands">
+                      <button type="button" class="coll-h" aria-expanded="true">
+                        <div><b>仪表速度分档</b><span id="bandsSummary">66 / 88 / 110 / 132 km/h · 五段配色</span></div>
+                        <i>▾</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="panel">
+                          <div class="panel-h"><div><b>速度分级与颜色</b><span>车速跨过这些变化点就换颜色，作用在仪表盘的大数字、光晕和下面的阈值条上。按 km/h 设置，相邻两档至少差 1 km/h；改完立即生效，不用重连。</span></div></div>
+                          <div class="band-edit" id="bandBreaks"></div>
+                          <div class="note-inline">每次 ±1 km/h；相邻两档至少差 1，到边界按钮停住。仪表上的大数字、光晕、阈值条会一起换到对应颜色。</div>
+                          <div class="slabel">每段颜色<small>暗底高对比色板</small></div>
+                          <div id="bandColors"></div>
+                          <button type="button" class="tile tone-warn" id="resetBands"><span class="tx"><b>恢复默认分级（66 / 88 / 110 / 132 · 冰蓝→红）</b></span><span class="dot"></span></button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>个人信息（事故取证用）</b><span>张三 沪A·12345 138… · 证件照 2/2</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="panel">
+                          <div class="panel-h"><div><b>报案信息</b><span>只被「工具 → 事故处理 → 导出取证清单 PDF」读取，也用来核对现场要念给交警/保险的号码。全部存本机（应用私有存储），不联网、不上传。</span></div></div>
+                          <div class="fwrap"><em>姓名</em><div class="inp"><span>张三</span></div></div>
+                          <div class="fwrap"><em>手机号</em><div class="inp"><span>138 0000 0000</span></div></div>
+                          <div class="fwrap"><em>车牌号</em><div class="inp"><span>沪A·12345</span></div></div>
+                          <div class="fwrap"><em>车架号 VIN</em><div class="inp"><span>5YJ3E1EA7KFSAMPLE</span></div></div>
+                          <div class="fwrap"><em>保险公司</em><div class="inp"><span>人保财险 PICC</span><span class="dd">▾</span></div></div>
+                          <div class="fwrap"><em>保单号</em><div class="inp"><span>PDAA2026…</span></div></div>
+                          <div class="tile-row">
+                            <div class="tile dis"><span class="tx"><b>保存</b><em>没有改动</em></span><span class="dot"></span></div>
+                            <div class="tile plain fixed110 static"><span class="tx"><b>清空文字</b></span><span class="dot"></span></div>
+                          </div>
+                        </div>
+                        <div class="panel">
+                          <div class="panel-h"><div><b>证件照片</b><span>驾驶证、行驶证各一张，导出 PDF 时排在「证件照片」栏，现场不用再翻相册。</span></div></div>
+                          <div class="tile-row">
+                            <div class="idphoto">
+                              <div class="box"><span>驾驶证 · 已存</span></div>
+                              <div class="ops"><span class="pill">更换</span><span class="pill t-bad">清除</span></div>
+                            </div>
+                            <div class="idphoto">
+                              <div class="box"><span>行驶证 · 已存</span></div>
+                              <div class="ops"><span class="pill">更换</span><span class="pill t-bad">清除</span></div>
+                            </div>
+                          </div>
+                          <div class="note-inline">选完会复制一份到本机私有目录，之后删掉相册里的原图也不影响导出。照片只在导出 PDF 时读取，同样不出本机。</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>本机钥匙与缓存</b><span>指纹尾 …7C4E · P-256</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="panel">
+                          <div class="panel-h"><div><b>车钥匙公钥</b><span>私钥由 AndroidKeyStore 加密后仅存本机，不上传任何服务器</span></div><span class="pill t-mid">P-256</span></div>
+                          <div class="pubkey"><span>04</span><span>7c4e9a21</span><span>3b8f0d6c</span><span>5a1e92b4</span><span>77c3d0f8</span><span>6e2a41b9</span><span>0d5f37c8</span><span>91a4e602</span><span>5b8d3c7f</span><span>40e9a1b6</span><span>2c74d5f0</span><span>8a3b6e19</span><span>7d2c4f80</span><span>5e1b9a37</span><span>c6d02f84</span><span>e7a1b5c9</span><span>3f8d2604</span><span>7c4e</span></div>
+                          <div class="hint t-mid">只有当「调试」页出现“本机钥匙无法解密”时才需要重新生成：这会替换本机钥匙，之后必须重新刷卡配对，并在车机「控制→钥匙」删除旧条目。日常更新 app / 重启不会换钥匙。</div>
+                          <div class="tile tone-bad static"><span class="tx"><b>重新生成本机钥匙</b></span><span class="dot"></span></div>
+                        </div>
+                        <div class="panel">
+                          <div class="panel-h"><div><b>协议会话缓存</b><span>缓存握手结果以加速首条命令。持续报签名/计数器错误时清除重建。</span></div></div>
+                          <div class="kv"><span>清除后</span><b>下次连接重新握手</b></div>
+                          <div class="tile tone-warn static"><span class="tx"><b>清除会话缓存</b></span><span class="dot"></span></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="coll">
+                      <button type="button" class="coll-h" aria-expanded="false">
+                        <div><b>关于与开发者</b><span>v0.3.0 · 开发者模式关</span></div>
+                        <i>▸</i>
+                      </button>
+                      <div class="coll-b">
+                        <div class="panel">
+                          <div class="panel-h"><div><b>开发者模式</b><span>打开后底栏显示「调试」页（链路自检、分级日志）。日常使用无需打开。</span></div></div>
+                          <div class="kv" style="align-items:center"><span>已关闭</span><span class="switch"></span></div>
+                        </div>
+                        <div class="slabel">关于</div>
+                        <div class="panel tight">
+                          <div class="kv"><span>版本</span><b>T-Dash v0.3.0</b></div>
+                          <div class="kv"><span>通道</span><b>蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）</b></div>
+                          <div class="kv"><span>云端</span><b>无：无账号登录、无遥测服务器；网络权限仅用于轨迹页地图底图</b></div>
+                          <div class="kv"><span>远程</span><b>人不在车旁时需要 Fleet API，当前版本未启用</b></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="tabbar" id="simTabs">
+                  <button type="button" class="tab" data-goto="control"><svg><use href="#i-ctrl"/></svg>控制</button>
+                  <button type="button" class="tab" data-goto="tools"><svg><use href="#i-tools"/></svg>工具</button>
+                  <button type="button" class="tab on" data-goto="cluster"><svg><use href="#i-gauge"/></svg>仪表</button>
+                  <button type="button" class="tab" data-goto="stats"><svg><use href="#i-chart"/></svg>统计</button>
+                  <button type="button" class="tab" data-goto="settings"><svg><use href="#i-gear"/></svg>设置</button>
+                </div>
+                <div class="gesturebar"><i></i></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sim-copy">
+            <h3 id="stageTitle">仪表 · 行车版面</h3>
+            <p id="stageDesc">大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 自动换成时钟、三张状态卡和右下角速度环。</p>
+            <div class="sim-chips" id="stageChips"><span>状态栏</span><span>阈值轨</span><span>270° 功率弧</span><span>路径小图</span></div>
+            <div class="sim-hint" id="stageHint"><b>可以操作：</b>P / D 换版面；控制页解锁、开闭件会同步更新状态胶囊与最近命令；设置页能改速度分档，仪表立刻跟着变。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ 延迟 ============ -->
+  <div class="wrap">
+    <section id="latency">
+      <div class="latency-grid">
+        <div class="latency-copy reveal">
+          <span class="eyebrow">Why it feels instant</span>
+          <h2>少一跳，就快一截。</h2>
+          <p>命令不经过任何服务器。握手完成后，手机和车之间是一条加密的蓝牙通道；<b>会话缓存</b>让重启后的第一条命令省掉一次往返。</p>
+          <p>锁车、开闭件、门锁状态走 <b>VCSEC</b>——整车睡着时也能秒回，不会为了看一眼状态把车叫醒。</p>
+          <div class="tiny-cards">
+            <div class="tiny"><b>会话缓存</b><span>epoch / counter 落盘，冷启动少一次握手</span></div>
+            <div class="tiny"><b>VCSEC 免唤醒</b><span>车身控制器直接应答锁车类请求</span></div>
+            <div class="tiny"><b>无网络栈</b><span>车辆链路零云端延迟、零计费</span></div>
+          </div>
+        </div>
+
+        <div class="paths reveal" style="transition-delay:.08s" aria-label="链路延迟示意">
+          <div class="path-row">
+            <div class="path-label"><b>T-Dash</b>BLE 直连</div>
+            <div class="track">
+              <span class="line"></span>
+              <span class="node a"><span></span><small>手机</small></span>
+              <span class="node c"><span></span><small>车辆</small></span>
+              <span class="packet blue"></span>
+            </div>
+            <div class="path-badge">~50–300 ms</div>
+          </div>
+          <div class="path-row">
+            <div class="path-label"><b>云端方案</b>示意</div>
+            <div class="track">
+              <span class="line"></span>
+              <span class="node a"><span></span><small>手机</small></span>
+              <span class="node b"><span></span><small>服务器</small></span>
+              <span class="node c"><span></span><small>车辆</small></span>
+              <span class="packet cyan"></span>
+            </div>
+            <div class="path-badge muted">多一跳 · 依赖网络</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ 安全 ============ -->
+  <div class="wrap">
+    <section id="security">
+      <div class="security reveal">
+        <div>
+          <span class="eyebrow">Security</span>
+          <h2>私钥只在这台手机上。</h2>
+          <p>首次启动时随机生成一把 P-256 钥匙。私钥用 AndroidKeyStore 的 AES-256-GCM 封装后存放，配对时只把公钥交给车；日志里只出现指纹末四位。</p>
+          <ul class="sec-list">
+            <li><span class="n">01</span><span><b>每台设备独立生成</b>，不预置、不复用，换机不会带走旧钥匙。</span></li>
+            <li><span class="n">02</span><span><b>解封失败绝不静默换钥匙</b>，要你在设置里显式确认才重新生成。</span></li>
+            <li><span class="n">03</span><span><b>车辆链路纯 BLE</b>；全 app 唯一的联网点是统计页的地图瓦片，没有遥测上传。</span></li>
+          </ul>
+        </div>
+        <div class="sec-visual" aria-label="密钥封装流程动效示意">
+          <div class="chain">
+            <div class="item key"><b>P-256 私钥</b><span>PKCS#8 · 本机生成</span></div>
+            <div class="link"></div>
+            <div class="item sealed"><b>AES-256-GCM 封装</b><span>AndroidKeyStore</span></div>
+            <div class="link"></div>
+            <div class="item"><b>iv ‖ 密文 → 本机存储</b><span>冷启动解封自检</span></div>
+            <div class="link"></div>
+            <div class="item cloud"><b>云端 / 遥测服务器</b><span>不存在</span></div>
+          </div>
+          <div class="fp">log 指纹 <b>… 7C 4E 9A 21</b> · 仅末 4 字节</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ 免费 ============ -->
+  <div class="wrap">
+    <section id="free">
+      <div class="sec-head reveal">
+        <span class="eyebrow">Open protocol, zero cost</span>
+        <h2>协议开源，使用免费。</h2>
+        <p>命令层直接采用特斯拉官方开源仓库 vehicle-command 的公开协议定义，手机与车直接对话——没有月费，没有高级版，也没有插在中间收费的服务器。</p>
+      </div>
+      <div class="stats-strip reveal">
+        <div><b>0<em>元/月</em></b><span>没有订阅与内购</span></div>
+        <div><b>0<em>个</em></b><span>要登录的账号</span></div>
+        <div><b>0<em>台</em></b><span>经手数据的服务器</span></div>
+        <div><b>1<em>处</em></b><span>联网点：仅统计页地图瓦片</span></div>
+      </div>
+      <p class="note reveal"><b>成本清单：</b>一台支持蓝牙的安卓手机，其余全免。钥匙是你自己的 NFC 卡，公钥只存在你手机里；项目与 Tesla 无隶属，也不接入任何官方账号体系。</p>
+    </section>
+  </div>
+
+  <!-- ============ 上车 ============ -->
+  <div class="wrap">
+    <section id="start">
+      <div class="sec-head reveal">
+        <span class="eyebrow">First run</span>
+        <h2>三步，把钥匙交给手机。</h2>
+        <p>不需要 Tesla 开发者账号，也不需要填任何账号密码。</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <span class="no">STEP 01</span>
+          <h3>站到车旁</h3>
+          <p>打开手机蓝牙，保持约 <b>5 米内</b>。输入 17 位 VIN，扫描并连接车辆。</p>
+        </div>
+        <div class="step reveal" style="transition-delay:.06s">
+          <span class="no">STEP 02</span>
+          <h3>发一次配对请求</h3>
+          <p>点「发送配对请求」，把 <b>NFC 钥匙卡</b>贴在中控读取区。</p>
+        </div>
+        <div class="step reveal" style="transition-delay:.12s">
+          <span class="no">STEP 03</span>
+          <h3>车机上点确认</h3>
+          <p>中控屏弹出确认框后点「确认」，钥匙就留在本机了；之后打开 App 自动重连。</p>
+        </div>
+      </div>
+      <p class="note reveal"><b>适用边界：</b>控制与仪表依赖蓝牙，远程能力不在这一版里。车机屏幕本身不受第三方 App 控制；这里的仪表是手机侧的数字仪表。本页按当前版本的实际排版重绘，视频帧与地图为示意底图。</p>
+    </section>
+  </div>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <div class="brand">
+        <span class="mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="url(#tdBadge)" mask="url(#tdBadgeCut)"/></svg>
+        </span>
+        T-Dash <small>v0.3.0</small>
+      </div>
+      <p style="margin-top:12px">T-Dash 是纯蓝牙的 Tesla 安卓伴侣。协议层来自 teslamotors/vehicle-command 的公开定义，本项目与其无隶属关系，也与 Tesla, Inc. 无关。仅供个人车辆管理与学习使用。</p>
+    </div>
+    <div class="meta">
+      <b>车辆链路</b> BLE · 无云端<br>
+      <b>地图</b> 高德瓦片 · 仅此一处联网<br>
+      <b>平台</b> Android · Kotlin / Compose
+    </div>
+  </div>
+</footer>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const pad = n => String(n).padStart(2, '0');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const rgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+
+  /* ---------- 滚动进度与入场 ---------- */
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = (h > 0 ? (scrollY / h) * 100 : 0) + '%';
+  };
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }), { threshold: .14 });
+  $$('.reveal').forEach(el => io.observe(el));
+
+  /* ---------- 实时时钟 ---------- */
+  function tickClock() {
+    const d = new Date();
+    const hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    $$('[data-clock]').forEach(el => el.textContent = hm);
+    const week = '日一二三四五六'[d.getDay()];
+    $$('[data-date]').forEach(el => el.textContent = `${d.getMonth() + 1}月${d.getDate()}日 周${week}`);
+    const pu = $('#pillUpdated');
+    if (pu) pu.textContent = `更新 ${hm}:${pad(d.getSeconds())}`;
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  /* ---------- 速度分档 ---------- */
+  const PALETTE = ['#38BDF8', '#E8EAED', '#FFB300', '#FF7043', '#FF5252', '#4CAF50', '#B388FF', '#00E5FF'];
+  const BREAKS_DEFAULT = [66, 88, 110, 132];
+  const COLORS_DEFAULT = [0, 1, 2, 3, 4].map(i => PALETTE[i]);
+  let breaks = BREAKS_DEFAULT.slice();
+  let colors = COLORS_DEFAULT.slice();
+  const bandOf = v => {
+    for (let i = 0; i < breaks.length; i++) if (v < breaks[i]) return i;
+    return 4;
+  };
+
+  const bandBreaksEl = $('#bandBreaks');
+  const bandColorsEl = $('#bandColors');
+  const bandsSummary = $('#bandsSummary');
+  function renderBands() {
+    bandBreaksEl.innerHTML = breaks.map((v, i) => `
+      <div class="band-row" data-i="${i}">
+        <span class="brl">第 ${i + 1} 档上限</span>
+        <button type="button" class="stepbtn" data-step="-1" aria-label="第 ${i + 1} 档上限减一">−</button>
+        <b>${v}</b>
+        <button type="button" class="stepbtn" data-step="1" aria-label="第 ${i + 1} 档上限加一">+</button>
+      </div>`).join('');
+    bandColorsEl.innerHTML = colors.map((c, i) => {
+      const lo = i === 0 ? 0 : breaks[i - 1];
+      const hi = breaks[i];
+      const range = hi == null ? `${lo}+` : `${lo}–${hi}`;
+      return `<div class="bcolor" data-ci="${i}">
+        <span class="bdot" style="--c:${c}"></span>
+        <span class="brange">${range} km/h</span>
+        <div class="swatches">${PALETTE.map(p => `<button type="button" class="swatch${p === c ? ' on' : ''}" data-color="${p}" style="--c:${p}" aria-label="颜色 ${p}"></button>`).join('')}</div>
+      </div>`;
+    }).join('');
+    bandsSummary.textContent = breaks.join(' / ') + ' km/h · 五段配色';
+  }
+  bandBreaksEl.addEventListener('click', e => {
+    const btn = e.target.closest('[data-step]');
+    if (!btn) return;
+    const i = +btn.closest('.band-row').dataset.i;
+    const d = +btn.dataset.step;
+    const lo = i === 0 ? 10 : breaks[i - 1] + 1;
+    const hi = i === 3 ? 240 : breaks[i + 1] - 1;
+    breaks[i] = clamp(breaks[i] + d, lo, hi);
+    renderBands();
+  });
+  bandColorsEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-color]');
+    if (!b) return;
+    const ci = +b.closest('.bcolor').dataset.ci;
+    colors[ci] = b.dataset.color;
+    renderBands();
+  });
+  $('#resetBands').addEventListener('click', () => {
+    breaks = BREAKS_DEFAULT.slice();
+    colors = COLORS_DEFAULT.slice();
+    renderBands();
+  });
+  renderBands();
+
+  /* ---------- 仪表动效 ---------- */
+  const CX = 65, CY = 65, R = 48, A0 = 135, A1 = 405;
+  const P_MIN = -80, P_MAX = 250;
+  const ZERO = A0 + (A1 - A0) * (0 - P_MIN) / (P_MAX - P_MIN);
+  const point = deg => {
+    const a = deg * Math.PI / 180;
+    return [CX + R * Math.cos(a), CY + R * Math.sin(a)];
+  };
+  function arcPath(from, to) {
+    const [x0, y0] = point(from), [x1, y1] = point(to);
+    const large = Math.abs(to - from) > 180 ? 1 : 0;
+    const sweep = to > from ? 1 : 0;
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${R} ${R} 0 ${large} ${sweep} ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  }
+  const powerAngle = p => p >= 0
+    ? ZERO + (p / P_MAX) * (A1 - ZERO)
+    : ZERO - (p / P_MIN) * (ZERO - A0);
+  const powerColor = p => p > 150 ? '#F04A50' : (p < -5 ? '#3BC46B' : '#E8EEF5');
+
+  function drawCluster(root, speed, power) {
+    const idx = bandOf(speed);
+    const color = colors[idx];
+    root.style.setProperty('--band', color);
+    root.style.setProperty('--glow', rgba(color, .17));
+
+    const num = root.querySelector('[data-speed]');
+    if (num) num.textContent = String(Math.round(speed));
+
+    const segs = root.querySelectorAll('[data-rail] i');
+    const weights = [66, 22, 22, 22, 28];
+    segs.forEach((seg, i) => {
+      seg.style.flex = `${weights[i]} 1 0`;
+      if (i < idx) {
+        seg.style.background = colors[i];
+        seg.style.opacity = '.45';
+        seg.style.boxShadow = 'none';
+      } else if (i === idx) {
+        seg.style.background = colors[i];
+        seg.style.opacity = '1';
+        seg.style.boxShadow = `0 0 8px ${rgba(colors[i], .7)}`;
+      } else {
+        seg.style.background = '#232C36';
+        seg.style.opacity = '1';
+        seg.style.boxShadow = 'none';
+      }
+    });
+
+    const pw = root.querySelector('[data-power]');
+    if (pw) pw.textContent = String(Math.round(power));
+    const unit = root.querySelector('.gtext span');
+    if (unit) unit.textContent = power < 0 ? '回收' : 'KW';
+
+    const angle = powerAngle(power);
+    const d = power >= 0 ? arcPath(ZERO, angle) : arcPath(angle, ZERO);
+    const pc = powerColor(power);
+    const active = root.querySelector('.arc-active');
+    const glow = root.querySelector('.arc-glow');
+    if (active) { active.setAttribute('d', d); active.setAttribute('stroke', pc); }
+    if (glow) { glow.setAttribute('d', d); glow.setAttribute('stroke', pc); glow.setAttribute('opacity', '.12'); }
+    const [dx, dy] = point(angle);
+    const dot = root.querySelector('.arc-dot');
+    const halo = root.querySelector('.arc-dot-halo');
+    if (dot) { dot.setAttribute('cx', dx.toFixed(2)); dot.setAttribute('cy', dy.toFixed(2)); dot.setAttribute('fill', pc); }
+    if (halo) { halo.setAttribute('cx', dx.toFixed(2)); halo.setAttribute('cy', dy.toFixed(2)); }
+  }
+
+  const driveRoots = $$('.cl');
+  function frame(now) {
+    const t = now / 1000;
+    driveRoots.forEach(root => {
+      if (root.dataset.mode === 'parked') return;
+      const speed = clamp(92 + 29 * Math.sin(t * .55) + 5 * Math.sin(t * 1.73), 0, 132);
+      const power = 48 + 53 * Math.sin(t * .55 + .85) + 10 * Math.sin(t * 1.9);
+      drawCluster(root, speed, power);
+    });
+    requestAnimationFrame(frame);
+  }
+  if (!reduce) {
+    requestAnimationFrame(frame);
+  } else {
+    driveRoots.forEach(root => drawCluster(root, 92, 57));
+  }
+
+  /* ---------- 视图路由 ---------- */
+  const pages = $$('#simApp .page');
+  const navLinks = $$('.sim-link');
+  const tabs = $$('#simTabs .tab');
+  const stabs = $$('#toolTabs .stab');
+  const kicker = $('#stageKicker'), stageName = $('#stageName'), stageTitle = $('#stageTitle');
+  const stageDesc = $('#stageDesc'), stageChips = $('#stageChips');
+  const simCl = $('#simCl');
+  let view = 'cluster';
+  let tool = 'quick';
+
+  function setToolUI(t) {
+    tool = t;
+    $$('.toolview').forEach(v => v.classList.toggle('on', v.dataset.tool === t));
+    stabs.forEach(b => b.classList.toggle('on', b.dataset.sub === t));
+  }
+  function navFor(v, t) {
+    const pool = navLinks.filter(a => a.dataset.view === v);
+    if (!pool.length) return null;
+    if (v === 'tools') return pool.find(a => a.dataset.tool === t) || pool[0];
+    return pool[0];
+  }
+  function applyCopy(link) {
+    if (!link) return;
+    kicker.textContent = link.dataset.kicker;
+    stageName.textContent = link.dataset.title;
+    stageTitle.textContent = link.dataset.title;
+    stageDesc.textContent = link.dataset.desc;
+    stageChips.innerHTML = (link.dataset.chips || '').split('|').filter(Boolean).map(x => `<span>${x}</span>`).join('');
+  }
+  function setView(v, t) {
+    if (v === 'tools') setToolUI(t || tool || 'quick');
+    view = v;
+    pages.forEach(p => p.classList.toggle('active', p.dataset.page === v));
+    tabs.forEach(b => b.classList.toggle('on', b.dataset.goto === v));
+    const link = navFor(v, t || tool);
+    navLinks.forEach(a => a.classList.toggle('on', a === link));
+    applyCopy(link);
+    if (v === 'cluster') syncClusterCopy();
+    if (v === 'stats') replayChart();
+  }
+  navLinks.forEach(a => a.addEventListener('click', () => {
+    setView(a.dataset.view, a.dataset.tool || '');
+  }));
+  tabs.forEach(b => b.addEventListener('click', () => {
+    const v = b.dataset.goto;
+    setView(v, v === 'tools' ? tool : '');
+  }));
+  stabs.forEach(b => b.addEventListener('click', () => {
+    setView('tools', b.dataset.sub);
+  }));
+
+  /* ---------- 档位与驻车版面 ---------- */
+  function syncClusterCopy() {
+    if (view !== 'cluster') return;
+    const parked = simCl.dataset.mode === 'parked';
+    kicker.textContent = '01 · 仪表';
+    stageName.textContent = parked ? '仪表 · 驻车版面' : '仪表 · 行车版面';
+    stageTitle.textContent = stageName.textContent;
+    stageDesc.textContent = parked
+      ? '挂 P 后的版面：54sp 时钟、三张状态卡（电量 / 车外 / 空调），速度环收到右下角 40%×58%。'
+      : '大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 自动换成时钟、三张状态卡和右下角速度环。';
+    stageChips.innerHTML = (parked ? '时钟|状态卡|速度环|日期' : '状态栏|阈值轨|270° 功率弧|路径小图')
+      .split('|').map(x => `<span>${x}</span>`).join('');
+  }
+  function setMode(mode) {
+    simCl.dataset.mode = mode;
+    $$('.pd-switch button').forEach(b => b.classList.toggle('on', b.dataset.modeBtn === mode));
+    if (view !== 'cluster') setView('cluster');
+    syncClusterCopy();
+  }
+  $$('.pd-switch button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.modeBtn)));
+
+  /* ---------- 折叠分区 ---------- */
+  $$('.coll-h').forEach(btn => btn.addEventListener('click', () => {
+    const coll = btn.closest('.coll');
+    const open = coll.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(open));
+    const arrow = btn.querySelector('i');
+    if (arrow) arrow.textContent = open ? '▾' : '▸';
+    if (open && coll.id === 'collSpeed') replayChart();
+  }));
+
+  /* ---------- 控制页状态 ---------- */
+  let lock = true, trunk = false, frunk = false;
+  const cmdBox = $('#ctlCmds');
+  function addCmd(label) {
+    const row = document.createElement('div');
+    row.className = 'cmdrow';
+    row.innerHTML = `<span><span class="ok">✓</span> ${label}</span><span class="ms">${88 + Math.floor(Math.random() * 104)} ms</span>`;
+    cmdBox.prepend(row);
+    while (cmdBox.children.length > 4) cmdBox.lastElementChild.remove();
+  }
+  function setPill(el, text, tone) {
+    el.textContent = text;
+    el.className = 'pill ' + tone;
+  }
+  function refreshControl() {
+    setPill($('#pillLock'), lock ? '门锁 已落锁' : '门锁 未落锁', lock ? 't-good' : 't-mid');
+    setPill($('#pillTrunk'), trunk ? '后备箱 开' : '后备箱 关', trunk ? 't-warn' : 't-mid');
+    setPill($('#pillFrunk'), frunk ? '前备箱 开' : '前备箱 关', frunk ? 't-warn' : 't-mid');
+
+    $('#ctlUnlock').classList.toggle('dis', !lock);
+    $('#ctlLock').classList.toggle('dis', lock);
+    $('#ctlTrunkOpen').classList.toggle('dis', trunk);
+    $('#ctlTrunkClose').classList.toggle('dis', !trunk);
+    $('#ctlFrunkOpen').classList.toggle('dis', frunk);
+
+    $('#ctlUnlockEm').textContent = lock ? '' : '已经解锁';
+    $('#ctlLockEm').textContent = lock ? '已经落锁' : '';
+    $('#ctlTrunkOpenEm').textContent = trunk ? '后备箱已开' : '';
+    $('#ctlTrunkCloseEm').textContent = trunk ? '' : '后备箱已关';
+    $('#ctlFrunkOpenEm').textContent = frunk ? '前备箱已开' : '';
+
+    $('#sumLock').textContent = `${lock ? '已落锁' : '未落锁'} · ${trunk ? '后备箱开' : '后备箱关'} · ${frunk ? '前备箱开' : '前备箱关'}`;
+
+    $$('.cl-tells .tc').forEach((el, i) => {
+      if (i === 0) el.innerHTML = `<i></i>${lock ? '🔒 落锁' : '🔓 解锁'}`;
+    });
+  }
+  $('#ctlUnlock').addEventListener('click', () => {
+    if (!lock) return;
+    lock = false;
+    addCmd('解锁 · 车门');
+    refreshControl();
+  });
+  $('#ctlLock').addEventListener('click', () => {
+    if (lock) return;
+    lock = true;
+    addCmd('落锁 · 全部车门');
+    refreshControl();
+  });
+  $('#ctlTrunkOpen').addEventListener('click', () => {
+    if (trunk) return;
+    trunk = true;
+    addCmd('开后备箱');
+    refreshControl();
+  });
+  $('#ctlTrunkClose').addEventListener('click', () => {
+    if (!trunk) return;
+    trunk = false;
+    addCmd('关后备箱');
+    refreshControl();
+  });
+  $('#ctlFrunkOpen').addEventListener('click', () => {
+    if (frunk) return;
+    frunk = true;
+    addCmd('开前备箱');
+    refreshControl();
+  });
+  $$('[data-page="control"] .tile').forEach(tile => {
+    if (tile.id) return;
+    tile.addEventListener('click', () => {
+      if (tile.classList.contains('dis')) return;
+      const b = tile.querySelector('b');
+      if (b) addCmd(b.textContent);
+    });
+  });
+  refreshControl();
+
+  /* ---------- 统计页 ---------- */
+  const speedLine = $('#statsLine');
+  const statsArea = $('[data-page="stats"] .lc svg path[fill="url(#lcFade)"]');
+  const statPoints = $('#statPoints');
+  const statsNote = $('#statsNote');
+  const noteDefault = statsNote.textContent;
+  const clearBtn = $('#clearChart');
+  let cleared = false;
+  function replayChart() {
+    if (cleared || reduce) return;
+    speedLine.style.transition = 'none';
+    speedLine.setAttribute('stroke-dashoffset', '100');
+    void speedLine.getBoundingClientRect();
+    speedLine.style.transition = 'stroke-dashoffset 1.15s ease';
+    speedLine.setAttribute('stroke-dashoffset', '0');
+  }
+  clearBtn.addEventListener('click', () => {
+    cleared = !cleared;
+    if (cleared) {
+      speedLine.style.transition = 'stroke-dashoffset .3s ease';
+      speedLine.setAttribute('stroke-dashoffset', '100');
+      statsArea.style.transition = 'opacity .3s';
+      statsArea.style.opacity = '0';
+      statPoints.textContent = '0/0 点';
+      statsNote.textContent = '曲线已清空（演示）。真实版本清空的是本次启动的采样，行程记录与相册文件都不动。';
+      clearBtn.textContent = '恢复演示';
+    } else {
+      statsArea.style.opacity = '';
+      speedLine.style.transition = 'stroke-dashoffset .6s ease';
+      speedLine.setAttribute('stroke-dashoffset', '0');
+      statPoints.textContent = '214/214 点';
+      statsNote.textContent = noteDefault;
+      clearBtn.textContent = '清空曲线';
+    }
+  });
+  $$('.tr-chip').forEach(c => c.addEventListener('click', () => {
+    $$('.tr-chip').forEach(x => x.classList.toggle('on', x === c));
+  }));
+  const overlayPill = $('#overlayPill');
+  overlayPill.addEventListener('click', () => {
+    const on = overlayPill.classList.toggle('on');
+    overlayPill.textContent = on ? '叠加中' : '叠加全部';
+  });
+
+  /* ---------- 行车记录仪 ---------- */
+  const dcExpand = $('#dcExpand');
+  const dcPlay = $('#dcPlay');
+  const dcFill = $('#dcFill');
+  const dcProgress = $('#dcProgress');
+  const dcPicker = $('#dcPicker');
+  const dcCamCount = $('#dcCamCount');
+  const dcList = $('#dcList');
+  let dcPos = 12, dcDur = 60, dcPlaying = false;
+  const dcBase = new Date(2026, 9, 24, 15, 32, 2).getTime();
+  const dcFmt = s => `${Math.floor(s / 60)}:${pad(s % 60)}`;
+  const dcWall = s => {
+    const d = new Date(dcBase + s * 1000);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+  function dcRender() {
+    const wall = dcWall(dcPos);
+    dcProgress.textContent = `进度 ${dcFmt(dcPos)} / ${dcFmt(dcDur)} · 画面时间 ${wall}`;
+    dcFill.style.width = (dcPos / dcDur * 100) + '%';
+    dcExpand.querySelectorAll('.ctime').forEach(el => el.textContent = wall);
+    dcPlay.textContent = dcPlaying ? '暂停' : '播放';
+  }
+  dcPlay.addEventListener('click', () => {
+    dcPlaying = !dcPlaying;
+    if (dcPos >= dcDur) dcPos = 0;
+    dcRender();
+  });
+  dcExpand.querySelectorAll('[data-seek]').forEach(b => b.addEventListener('click', () => {
+    const v = Number(b.dataset.seek);
+    dcPos = Math.abs(v) === 30 ? dcPos + v : v;
+    dcPos = Math.max(0, Math.min(dcDur, dcPos));
+    dcRender();
+  }));
+  setInterval(() => {
+    if (document.hidden || !dcPlaying) return;
+    dcPos = Math.min(dcDur, dcPos + 1);
+    if (dcPos >= dcDur) dcPlaying = false;
+    dcRender();
+  }, 1000);
+
+  dcPicker.querySelectorAll('[data-pcam]').forEach(b => b.addEventListener('click', () => {
+    const on = b.classList.contains('on');
+    const count = dcPicker.querySelectorAll('.stab.on').length;
+    if ((on && count === 1) || (!on && count === 4)) return;
+    b.classList.toggle('on', !on);
+    const tile = dcExpand.querySelector(`.cam[data-cam="${b.dataset.pcam}"]`);
+    if (tile) tile.style.display = on ? 'none' : '';
+    dcCamCount.textContent = `机位（在播 ${dcPicker.querySelectorAll('.stab.on').length}/6，上限 4）`;
+  }));
+
+  const dcRows = $$('#dcList > .evrow');
+  function dcSelect(row) {
+    const same = row.classList.contains('sel');
+    dcRows.forEach(r => {
+      const on = r === row && !same;
+      r.classList.toggle('sel', on);
+      const caret = r.querySelector('.caret');
+      if (caret) caret.textContent = on ? '▲' : '▼';
+      r.setAttribute('aria-expanded', String(on));
+    });
+    dcExpand.style.display = same ? 'none' : '';
+    if (same) return;
+    row.insertAdjacentElement('afterend', dcExpand);
+    const city = row.dataset.city;
+    $('#dcEvJson').style.display = city ? '' : 'none';
+    $('#dcCity').textContent = city || '未记录';
+    $('#dcTrig').textContent = row.dataset.trig || '未记录';
+    $('#dcPos').textContent = row.dataset.pos || '未记录';
+    $('#dcReason').textContent = row.dataset.reason || '未记录';
+    $('#dcCam').textContent = row.dataset.cam || '未记录';
+    dcRender();
+  }
+  dcRows.forEach(row => row.addEventListener('click', () => dcSelect(row)));
+
+  $$('#dcFilters .stab').forEach(b => b.addEventListener('click', () => {
+    $$('#dcFilters .stab').forEach(x => x.classList.toggle('on', x === b));
+    const f = b.dataset.filter;
+    dcRows.forEach(r => {
+      const hit = f === 'all' || (f === 'impact' ? r.dataset.impact === '1' : r.dataset.src === f);
+      r.style.display = hit ? '' : 'none';
+      if (!hit && r.classList.contains('sel')) {
+        r.classList.remove('sel');
+        const caret = r.querySelector('.caret');
+        if (caret) caret.textContent = '▼';
+        r.setAttribute('aria-expanded', 'false');
+        dcExpand.style.display = 'none';
+      }
+    });
+  }));
+
+  let exFrom = 1, exTo = 2;
+  const EX_MAX = 2;
+  const exTimes = [null, '15:32:02', '15:32:58'];
+  function exRender() {
+    exFrom = Math.max(1, Math.min(exFrom, exTo));
+    exTo = Math.min(EX_MAX, Math.max(exTo, exFrom));
+    $('#fromNum').textContent = `${exFrom}/${EX_MAX}`;
+    $('#toNum').textContent = `${exTo}/${EX_MAX}`;
+    $('#fromTime').textContent = exTimes[exFrom];
+    $('#toTime').textContent = exTimes[exTo];
+    const n = $$('#exportCams .stab.on').length;
+    $('#exportLabel').textContent = `导出 ${exTo - exFrom + 1} 段 · ${n} 路（含时间码）`;
+  }
+  $$('[data-from]').forEach(b => b.addEventListener('click', () => { exFrom += Number(b.dataset.from); exRender(); }));
+  $$('[data-to]').forEach(b => b.addEventListener('click', () => { exTo += Number(b.dataset.to); exRender(); }));
+  $$('#exportCams .stab').forEach(b => b.addEventListener('click', () => {
+    const on = b.classList.contains('on');
+    const count = $$('#exportCams .stab.on').length;
+    if ((on && count === 1) || (!on && count === 4)) return;
+    b.classList.toggle('on', !on);
+    exRender();
+  }));
+  exRender();
+
+  /* ---------- 零百演示 ---------- */
+  const accelBtn = $('#accelStart');
+  const accelRun = $('#accelRun');
+  const accelState = $('#accelState');
+  const accelCancel = $('#accelCancel');
+  const accelResults = $('#accelResults');
+  let accelRunning = false, accelDelay = null;
+  function accelReset() {
+    accelRunning = false;
+    clearTimeout(accelDelay);
+    accelBtn.style.display = '';
+    accelRun.style.display = 'none';
+  }
+  function addAccelRow(ms) {
+    const old = accelResults.querySelector('.demo-row');
+    if (old) old.remove();
+    const row = document.createElement('div');
+    row.className = 'res-row demo-row';
+    const d = new Date();
+    const n = accelResults.querySelectorAll('.res-row').length + 1;
+    row.innerHTML = `<div class="res-meta"><b>#${n} · ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}</b><span>0-60 2.05 s · 60-100 2.27 s · 峰值 214 kW · SOC 78%→77%</span></div><strong>${ms.toFixed(2)} s</strong>`;
+    accelResults.prepend(row);
+  }
+  function runAccel() {
+    if (accelRunning) return;
+    accelRunning = true;
+    accelBtn.style.display = 'none';
+    accelRun.style.display = 'flex';
+    accelState.textContent = '待命中：车辆停稳后起步即自动开始';
+    accelDelay = setTimeout(() => {
+      const started = performance.now();
+      const step = now => {
+        if (!accelRunning) return;
+        const el = (now - started) / 1000;
+        if (el < 4.32) {
+          accelState.textContent = `计时中：${el.toFixed(2)} s`;
+          requestAnimationFrame(step);
+        } else {
+          accelState.textContent = '完成';
+          addAccelRow(4.32);
+        }
+      };
+      requestAnimationFrame(step);
+    }, 1500);
+  }
+  accelBtn.addEventListener('click', runAccel);
+  accelCancel.addEventListener('click', accelReset);
+
+  /* ---------- 接续浮层 ---------- */
+  const pill = $('#resumePill');
+  const pillMain = $('#resumeMain');
+  let pillHide = null;
+  const resetPill = () => {
+    pill.classList.remove('ack');
+    pillMain.textContent = '⟳ 接续上一段 · 14:32 结束';
+  };
+  function showResume() {
+    resetPill();
+    pill.classList.add('show');
+    clearTimeout(pillHide);
+    pillHide = setTimeout(() => {
+      pill.classList.remove('show');
+      resetPill();
+      setTimeout(showResume, 4200);
+    }, 7000);
+  }
+  setTimeout(showResume, 2400);
+  pillMain.addEventListener('click', () => {
+    if (pill.classList.contains('ack')) return;
+    pill.classList.add('ack');
+    pillMain.textContent = '✓ 已接续 · 本段从 13:58 起';
+    clearTimeout(pillHide);
+    pillHide = setTimeout(() => {
+      pill.classList.remove('show');
+      resetPill();
+    }, 2800);
+  });
+  $('#resumeX').addEventListener('click', () => {
+    pill.classList.remove('show');
+    clearTimeout(pillHide);
+    setTimeout(showResume, 5000);
+  });
+
+  /* ---------- 初始视图 ---------- */
+  setView('cluster');
+})();
+</script>
+</body>
+</html>

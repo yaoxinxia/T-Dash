@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      座舱类 app 只出深色：窗口背景/状态栏/导航条都压到与 Compose 底色一致，
+      避免启动闪白、状态栏浅底配深色图标。
+    -->
+    <style name="Theme.TeslaLink" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#080A0D</item>
+        <item name="android:statusBarColor">#080A0D</item>
+        <item name="android:navigationBarColor">#0E1116</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
