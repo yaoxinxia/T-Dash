@@ -17,6 +17,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+private const val WEATHER_REFRESH_MS = 30 * 60_000L
+private const val WEATHER_RETRY_MS = 10 * 60_000L
+
 /**
  * Feeds the instrument cluster over BLE with two polling lanes:
  *  - fast lane (DRIVE: speed/power/shift/odometer) at ~250 ms while moving;
@@ -485,6 +488,39 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
         stopHeadingSensor()
         // 离开仪表/统计后没人再维护行驶信号：回到"不知道"，让各页恢复正常轮询。
         c.vehicleMoving.value = false
+    }
+
+    /**
+     * 驻车版面的天气（设置里默认关闭）。只在仪表页开着：缓存 12 小时内先显示，
+     * 30 分钟一刷；失败 10 分钟后再试。全程走网络，不占车机链路，也不发 BLE 请求。
+     */
+    val weather = MutableStateFlow<com.teslalink.app.weather.WeatherNow?>(null)
+    private var weatherJob: Job? = null
+
+    fun startWeather() {
+        if (weatherJob?.isActive == true) return
+        weatherJob = viewModelScope.launch {
+            if (c.prefs.getString("weather_on") != "1" || c.weather.apiKey() == null) {
+                weather.value = null
+                return@launch
+            }
+            weather.value = c.weather.cached()
+            while (currentCoroutineContext().isActive) {
+                val age = weather.value?.let { System.currentTimeMillis() - it.fetchedAtMs }
+                if (age != null && age < WEATHER_REFRESH_MS) {
+                    delay(WEATHER_REFRESH_MS - age)
+                    continue
+                }
+                val got = c.weather.fetch()
+                if (got != null) weather.value = got else delay(WEATHER_RETRY_MS)
+            }
+        }
+    }
+
+    fun stopWeather() {
+        weatherJob?.cancel()
+        weatherJob = null
+        weather.value = null
     }
 
     @Volatile private var lastTripGpsMs = 0L

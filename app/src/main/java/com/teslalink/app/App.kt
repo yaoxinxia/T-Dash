@@ -19,6 +19,9 @@ class AppContainer(private val app: Application) {
     val keyManager = KeyManager(app)
     val sessionCache = SessionCacheStore(app)
 
+    /** 可选的仪表天气：高德 Key + 手机定位，30 分钟一刷，不占车机链路。 */
+    val weather = com.teslalink.app.weather.WeatherService(app, prefs)
+
     /** 由 MainActivity 维护；自动重连与 keep-alive 的"前台"条件之一。 */
     val appInForeground = kotlinx.coroutines.flow.MutableStateFlow(false)
 

@@ -16,10 +16,12 @@ import com.teslalink.app.vm.StatusViewModel
 fun DashboardScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: LinkViewModel) {
     DisposableEffect(Unit) {
         dashboard.startBlePolling()
+        dashboard.startWeather()
         // 门锁指示条来自 VCSEC（免鉴权、不唤醒车机），这里与控制页共享同一个引用计数的轮询。
         status.startBodyPolling()
         onDispose {
             dashboard.stopBlePolling()
+            dashboard.stopWeather()
             status.stopBodyPolling()
         }
     }

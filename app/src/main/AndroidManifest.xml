@@ -3,9 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-      BLE-first app. INTERNET exists ONLY for map tiles under the 轨迹 chart
-      (CARTO/OSM raster tiles, HTTPS, disk-cached by osmdroid); nothing else
-      in the app touches the network, and the vehicle link stays BLE-only.
+      BLE-first app. INTERNET is used for two optional, non-vehicle things:
+      map tiles under the 轨迹 chart (CARTO/OSM raster, HTTPS, disk-cached
+      by osmdroid) and the dashboard's opt-in AMap weather (last known phone
+      location → city → AMap REST, off by default). Nothing else in the app
+      touches the network, and the vehicle link stays BLE-only.
       NOTE: BLUETOOTH_SCAN deliberately does NOT declare neverForLocation.
       With that flag, some OEM stacks (e.g. OriginOS) deliver a restricted
       result set that can omit the vehicle's advertisement entirely; matching

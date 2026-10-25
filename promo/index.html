@@ -329,6 +329,7 @@ button.pill{font-family:inherit;cursor:pointer;align-self:flex-start}
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
 }
 .cl-date{font-size:13px;color:var(--mid);letter-spacing:1px;margin-top:2px}
+.cl-weather{font-size:12px;color:var(--low);letter-spacing:.4px;margin-top:3px}
 .pk-cards{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
 .pk{
   background:rgba(27,34,42,.72);border:1px solid var(--hairline-soft);border-radius:12px;
@@ -513,6 +514,8 @@ button.pill{font-family:inherit;cursor:pointer;align-self:flex-start}
 .pubkey{display:flex;flex-wrap:wrap;column-gap:8px;font-family:var(--mono);font-size:10.5px;line-height:1.8;color:var(--mid)}
 .switch{width:44px;height:24px;border-radius:999px;background:var(--hairline);border:1px solid #2B3540;position:relative;flex:none}
 .switch::after{content:"";position:absolute;left:5px;top:50%;transform:translateY(-50%);width:16px;height:16px;border-radius:50%;background:var(--mid)}
+.switch.on{background:rgba(76,141,255,.32);border-color:rgba(76,141,255,.6)}
+.switch.on::after{left:auto;right:5px;background:var(--accent)}
 .idphoto{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px}
 .idphoto .box{width:100%;height:86px;border-radius:8px;border:1px solid rgba(76,141,255,.45);background:linear-gradient(140deg,#22384D 0%,#101D2A 55%,#0B141D 100%);position:relative;overflow:hidden;display:grid;place-items:center}
 .idphoto .box::after{content:"";position:absolute;inset:0;background:radial-gradient(55% 55% at 30% 22%,rgba(255,255,255,.18),transparent 70%)}
@@ -679,6 +682,7 @@ section{padding:96px 0}
 }
 .cl.land .cl-clock{font-size:38px}
 .cl.land .cl-date{font-size:11.5px}
+.cl.land .cl-weather{font-size:10.5px}
 .cl.land .pk-cards{grid-template-columns:1fr;gap:7px;margin-top:12px}
 .cl.land .cl-speed{position:absolute;inset:0}
 .cl.land[data-mode="parked"] .cl-speed{left:54%;top:38%;width:46%;height:62%}
@@ -885,6 +889,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                       <div class="cl-clockwrap">
                         <div class="cl-clock" data-clock>14:32</div>
                         <div class="cl-date" data-date>10月24日 周六</div>
+                            <div class="cl-weather">上海市 · 多云 18°</div>
                       </div>
                       <div class="pk-cards">
                         <div class="pk"><span>电量%</span><b>82</b><small>&nbsp;</small></div>
@@ -1030,6 +1035,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                           <div class="cl-clockwrap">
                             <div class="cl-clock" data-clock>14:32</div>
                             <div class="cl-date" data-date>10月24日 周六</div>
+                            <div class="cl-weather">上海市 · 多云 18°</div>
                           </div>
                           <div class="pk-cards">
                             <div class="pk"><span>电量%</span><b>82</b><small>&nbsp;</small></div>
@@ -1106,6 +1112,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                             <div class="cl-clockwrap">
                               <div class="cl-clock" data-clock>14:32</div>
                               <div class="cl-date" data-date>10月24日 周六</div>
+                            <div class="cl-weather">上海市 · 多云 18°</div>
                             </div>
                             <div class="pk-cards">
                               <div class="pk"><span>电量%</span><b>82</b><small>&nbsp;</small></div>
@@ -1441,7 +1448,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                       </div>
                     </div>
 
-                    <div class="note-inline" id="statsNote">采样间隔：行驶 250–500 ms（按往返自适应）/ 停车 600 ms，只读 DRIVE（车速、功率、里程、档位）；电量与温度 2.5 s，仅驻车时读取。车辆数据全部来自蓝牙直连，仅地图底图走网络。</div>
+                    <div class="note-inline" id="statsNote">采样间隔：行驶 250–500 ms（按往返自适应）/ 停车 600 ms，只读 DRIVE（车速、功率、里程、档位）；电量与温度 2.5 s，仅驻车时读取。车辆数据全部来自蓝牙直连；联网只用于地图底图和可选的高德天气（驻车时显示）。</div>
                     <button type="button" class="pill on" id="clearChart">清空曲线</button>
                   </div>
 
@@ -1948,18 +1955,19 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
 
                     <div class="coll">
                       <button type="button" class="coll-h" aria-expanded="false">
-                        <div><b>高德 Key（通用）</b><span>已配置 · 尾号 …8F2A</span></div>
+                        <div><b>高德 Key（通用）</b><span>已配置 · 尾号 …8F2A · 天气开</span></div>
                         <i>▸</i>
                       </button>
                       <div class="coll-b">
                         <div class="panel">
-                          <div class="panel-h"><div><b>高德开放平台 Key</b><span>全 app 通用的一项配置，目前只影响一处：「工具 → 事故处理 → 我在哪」的逆地理编码（把 GPS 坐标翻译成中文地址）。统计页轨迹的高德底图走公开栅瓦，不需要 Key；车辆数据全程蓝牙直连，与这个 Key 无关。</span></div></div>
+                          <div class="panel-h"><div><b>高德开放平台 Key</b><span>全 app 通用的一项配置，影响两处：「工具 → 事故处理 → 我在哪」的逆地理编码（把 GPS 坐标翻译成中文地址），以及可选的仪表天气。统计页轨迹的高德底图走公开栅瓦，不需要 Key；车辆数据全程蓝牙直连，与这个 Key 无关。</span></div></div>
                           <div class="inp"><span>a1b2c3d4e5f60718293a4b5c6d7e8f2a</span></div>
                           <div class="note-inline">只要「Key」那一串，不需要「安全密钥」（那是 JS API 用的）。高德控制台「我的应用」里这把 Key 的绑定服务必须显示 Web服务；显示 Web端 / Android平台 的会报 10009 平台不匹配；不要勾选数字签名。</div>
                           <div class="tile-row">
                             <div class="tile sel static"><span class="tx"><b>保存 Key</b></span><span class="dot"></span></div>
                             <div class="tile plain fixed110 static"><span class="tx"><b>清除</b></span><span class="dot"></span></div>
                           </div>
+                          <div class="kv" style="align-items:center"><span>驻车版面天气 · 已开启</span><span class="switch on"></span></div>
                         </div>
                       </div>
                     </div>
@@ -2051,7 +2059,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                         <div class="panel tight">
                           <div class="kv"><span>版本</span><b>T-Dash v0.0.1</b></div>
                           <div class="kv"><span>通道</span><b>蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）</b></div>
-                          <div class="kv"><span>云端</span><b>无：无账号登录、无遥测服务器；网络权限仅用于轨迹页地图底图</b></div>
+                          <div class="kv"><span>云端</span><b>无：无账号登录、无遥测服务器；联网只用于轨迹地图底图，以及可选的高德天气</b></div>
                           <div class="kv"><span>远程</span><b>人不在车旁时需要 Fleet API，当前版本未启用</b></div>
                         </div>
                       </div>
@@ -2143,7 +2151,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
           <ul class="sec-list">
             <li><span class="n">01</span><span><b>每台设备独立生成</b>，不预置、不复用，换机不会带走旧钥匙。</span></li>
             <li><span class="n">02</span><span><b>解封失败绝不静默换钥匙</b>，要你在设置里显式确认才重新生成。</span></li>
-            <li><span class="n">03</span><span><b>车辆链路纯 BLE</b>；全 app 唯一的联网点是统计页的地图瓦片，没有遥测上传。</span></li>
+            <li><span class="n">03</span><span><b>车辆链路纯 BLE</b>；联网只发生在统计页地图瓦片和可选的高德天气（默认关），没有遥测上传。</span></li>
           </ul>
         </div>
         <div class="sec-visual" aria-label="密钥封装流程动效示意">
@@ -2167,15 +2175,15 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
     <section id="free">
       <div class="sec-head reveal">
         <span class="eyebrow">Open source software · open protocol</span>
-        <h2>协议开源，使用免费。</h2>
-        <p>底层命令走特斯拉官方开源仓库 vehicle-command 的公开协议定义，手机与车直接对话——没有月费，没有高级版，也没有插在中间收费的服务器。</p>
-        <p>软件本身同样开源（Apache-2.0）：源码可读，蓝牙链路和密钥处理都能自己审计，也可以按自己的车和习惯改功能；欢迎提 issue、PR 一起共建。</p>
+        <h2>软件开源，使用免费。</h2>
+        <p>T-Dash 本身是 Apache-2.0 开源软件：源码可读，蓝牙链路和密钥处理都能自己审计，也可以按自己的车和习惯改功能；没有月费，没有高级版，也没有插在中间收费的服务器。欢迎提 issue、PR 一起共建。</p>
+        <p>底层命令遵循特斯拉官方开源仓库 vehicle-command 的公开协议定义，手机与车直接对话——不经过任何第三方服务。</p>
       </div>
       <div class="stats-strip reveal">
         <div><b>0<em>元/月</em></b><span>没有订阅与内购</span></div>
         <div><b>0<em>个</em></b><span>要登录的账号</span></div>
         <div><b>0<em>台</em></b><span>经手数据的服务器</span></div>
-        <div><b>1<em>处</em></b><span>联网点：仅统计页地图瓦片</span></div>
+        <div><b>2<em>处</em></b><span>联网点：地图瓦片 + 可选天气</span></div>
       </div>
       <p class="note reveal"><b>成本清单：</b>一台支持蓝牙的安卓手机，其余全免。钥匙是你自己的 NFC 卡，公钥只存在你手机里；项目与 Tesla 无隶属，也不接入任何官方账号体系。</p>
       <div class="cta reveal">
@@ -2230,7 +2238,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
     </div>
     <div class="meta">
       <b>车辆链路</b> BLE · 无云端<br>
-      <b>地图</b> 高德瓦片 · 仅此一处联网<br>
+      <b>地图</b> 高德瓦片 · 另可选高德天气<br>
       <b>平台</b> Android · Kotlin / Compose<br>
       <b>GitHub</b> <a href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">yaoxinxia/T-Dash</a><br>
       <b>Release</b> <a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.1" target="_blank" rel="noopener noreferrer">v0.0.1 · APK</a>

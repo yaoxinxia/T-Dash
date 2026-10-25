@@ -90,6 +90,7 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
     val tripNote by dashboard.tripNote.collectAsState()
     val phoneHeading by dashboard.phoneHeading.collectAsState()
     val speedBands by dashboard.speedBands.collectAsState()
+    val weather by dashboard.weather.collectAsState()
 
     // 「接续上一段」：上一段行程结束在 1 小时内才出现（服务区休息场景）。
     // 30 秒心跳只为让窗口到点后自己消失；行程收尾（trips 变化）会立刻重算。
@@ -184,6 +185,7 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
                                 ParkedInfo(
                                     state.soc, state.outsideTemp, state.driverTemp, state.insideTemp,
                                     state.climateOn, state.charging, state.chargePowerKw,
+                                    weather = weather,
                                     vertical = true, visible = parked,
                                     modifier = Modifier.fillMaxWidth(0.92f),
                                 )
@@ -221,6 +223,7 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
                             ParkedInfo(
                                 state.soc, state.outsideTemp, state.driverTemp, state.insideTemp,
                                 state.climateOn, state.charging, state.chargePowerKw,
+                                weather = weather,
                                 vertical = false, visible = parked,
                                 modifier = Modifier.align(Alignment.CenterStart).fillMaxWidth(0.56f),
                             )
@@ -694,6 +697,7 @@ private fun ParkedInfo(
     climateOn: Boolean?,
     charging: Boolean,
     chargePowerKw: Int?,
+    weather: com.teslalink.app.weather.WeatherNow?,
     vertical: Boolean,
     visible: Boolean,
     modifier: Modifier = Modifier,
@@ -767,6 +771,17 @@ private fun ParkedInfo(
             color = TL.textMid,
             modifier = Modifier.padding(top = 2.dp),
         )
+        weather?.let { w ->
+            Text(
+                "${w.city} · ${w.text} ${w.tempC}°",
+                fontSize = if (vertical) 10.5.sp else 12.sp,
+                letterSpacing = 0.4.sp,
+                color = TL.textLow,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 3.dp),
+            )
+        }
         if (vertical) {
             Column(
                 Modifier.padding(top = 12.dp).fillMaxWidth(),

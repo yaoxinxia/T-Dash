@@ -255,7 +255,7 @@ fun StatsScreen(dashboard: DashboardViewModel) {
         }
 
         Text(
-            "采样间隔：行驶 250 ms / 停车 600 ms（车速与档位），电量与温度 2.5 s。车辆数据全部来自蓝牙直连，仅地图底图走网络。",
+            "采样间隔：行驶 250 ms / 停车 600 ms（车速与档位），电量与温度 2.5 s。车辆数据全部来自蓝牙直连，联网只用于地图底图和可选的高德天气。",
             style = MaterialTheme.typography.labelSmall,
             color = TL.textLow,
             modifier = Modifier

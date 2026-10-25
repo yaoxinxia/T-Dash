@@ -98,6 +98,7 @@ fun SettingsScreen(
     var customName by remember { mutableStateOf("") }
     var macInput by remember { mutableStateOf("") }
     var amapKey by remember { mutableStateOf("") }
+    var weatherOn by remember { mutableStateOf(false) }
     var resetNote by remember { mutableStateOf<Pair<Tone, String>?>(null) }
     var macNote by remember { mutableStateOf<Pair<Tone, String>?>(null) }
     var nameNote by remember { mutableStateOf<Pair<Tone, String>?>(null) }
@@ -130,6 +131,7 @@ fun SettingsScreen(
         customName = container.prefs.getString("ble_name_override") ?: ""
         macInput = container.prefs.getString("ble_direct_addr") ?: ""
         amapKey = container.prefs.getString("amap_key") ?: ""
+        weatherOn = container.prefs.getString("weather_on") == "1"
     }
 
     Column(
@@ -297,13 +299,14 @@ fun SettingsScreen(
 
         CollapsibleSection(
             "高德 Key（通用）",
-            if (amapKey.isBlank()) "未配置 · 事故助手只能给经纬度，没有中文地址" else "已配置 · 尾号 …" + amapKey.takeLast(4),
+            (if (amapKey.isBlank()) "未配置 · 地址与天气都不可用"
+            else "已配置 · 尾号 …" + amapKey.takeLast(4) + if (weatherOn) " · 天气开" else ""),
         ) {
             Panel(
                 title = "高德开放平台 Key",
-                subtitle = "全 app 通用的一项配置，目前只影响一处：「工具 → 事故处理 → 我在哪」的逆地理编码" +
-                    "（把 GPS 坐标翻译成中文地址）。统计页轨迹的高德底图走公开栅瓦，不需要 Key；" +
-                    "车辆数据全程蓝牙直连，与这个 Key 无关。",
+                subtitle = "全 app 通用的一项配置，影响两处：「工具 → 事故处理 → 我在哪」的逆地理编码" +
+                    "（把 GPS 坐标翻译成中文地址），以及可选的仪表天气。" +
+                    "统计页轨迹的高德底图走公开栅瓦，不需要 Key；车辆数据全程蓝牙直连，与这个 Key 无关。",
             ) {
                 OutlinedTextField(
                     value = amapKey,
@@ -328,9 +331,9 @@ fun SettingsScreen(
                             amapKey = key
                             scope.launch { container.prefs.putString("amap_key", key) }
                             amapNote = if (key.isBlank()) {
-                                Tone.Good to "已清除 Key：地址翻译退回 OSM 兜底（国内常常连不上）"
+                                Tone.Good to "已清除 Key：地址翻译退回 OSM 兜底（国内常常连不上），仪表天气也不再显示"
                             } else {
-                                Tone.Good to "已保存 Key，下次进入事故助手即生效"
+                                Tone.Good to "已保存 Key，下次进入事故助手 / 仪表天气即生效"
                             }
                         },
                         modifier = Modifier.weight(1f),
@@ -342,12 +345,43 @@ fun SettingsScreen(
                         onClick = {
                             amapKey = ""
                             scope.launch { container.prefs.remove("amap_key") }
-                            amapNote = Tone.Good to "已清除 Key：地址翻译退回 OSM 兜底（国内常常连不上）"
+                            amapNote = Tone.Good to "已清除 Key：地址翻译退回 OSM 兜底（国内常常连不上），仪表天气也不再显示"
                         },
                         modifier = Modifier.width(110.dp),
                     )
                 }
                 amapNote?.let { HintBar(it.second, it.first) }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            "仪表驻车版面显示天气",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TL.textHi,
+                        )
+                        Text(
+                            "用手机最近一次定位查城市，再取高德天气；30 分钟一刷，只出现在停车时钟下方。" +
+                                "没有 Key、没给位置权限或请求失败时整块不显示，不会放占位符。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TL.textLow,
+                        )
+                    }
+                    Switch(
+                        checked = weatherOn,
+                        onCheckedChange = { on ->
+                            weatherOn = on
+                            scope.launch {
+                                container.prefs.putString("weather_on", if (on) "1" else null)
+                            }
+                            if (on && amapKey.isBlank()) {
+                                amapNote = Tone.Warn to "天气已开启，但还没保存 Key：保存后进入仪表才会请求"
+                            }
+                        },
+                    )
+                }
             }
         }
 
@@ -543,7 +577,7 @@ fun SettingsScreen(
         Panel(tight = true) {
             KeyValue("版本", "T-Dash v0.3.0")
             KeyValue("通道", "蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）")
-            KeyValue("云端", "无：无账号登录、无遥测服务器；网络权限仅用于轨迹页地图底图")
+            KeyValue("云端", "无：无账号登录、无遥测服务器；联网只用于轨迹地图底图，以及可选的高德天气")
             KeyValue("远程", "人不在车旁时需要 Fleet API，当前版本未启用")
         }
         }
