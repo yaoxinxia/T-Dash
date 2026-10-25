@@ -579,6 +579,18 @@ section{padding:96px 0}
     rgba(11,14,18,.55);
 }
 .place-svg{display:block;width:100%;height:auto;border-radius:14px}
+.place-svg .ppos{transition:opacity .32s ease}
+.place-svg .phalo{opacity:0;transition:opacity .32s ease}
+.place-svg .pin,.place-svg .pint,.place-svg .pind,.place-svg .pindot{transition:fill .32s ease,stroke .32s ease}
+.place-svg.lit .ppos{opacity:.24}
+.place-svg .ppos.on{opacity:1}
+.place-svg .ppos.on .phalo{opacity:1}
+.place-svg .ppos.on .pin{fill:#4C8DFF;stroke:#CFE4FF}
+.place-svg .ppos.on .pint{fill:#06111F}
+.place-svg .ppos.on .pind{stroke:#7FB2FF}
+.place-svg .ppos.on .pindot{fill:#CFE4FF}
+.place-hint{display:none;color:var(--low)}
+@media (hover:hover){.place-hint{display:inline}}
 .place-cap{
   display:flex;align-items:baseline;justify-content:space-between;gap:12px;
   padding:10px 4px 0;font-size:9.5px;color:var(--low);letter-spacing:.04em;
@@ -587,9 +599,10 @@ section{padding:96px 0}
 .place-legend{display:flex;flex-direction:column;gap:9px}
 .place-item{
   display:flex;gap:12px;padding:13px 14px;border:1px solid var(--hairline-soft);border-radius:14px;
-  background:rgba(20,25,32,.45);transition:border-color .25s,background .25s;
+  background:rgba(20,25,32,.45);cursor:default;transition:border-color .25s,background .25s;
 }
-.place-item:hover{border-color:#33414F;background:rgba(20,25,32,.72)}
+.place-item:hover,.place-item.on{border-color:#33414F;background:rgba(20,25,32,.72)}
+.place-item.on .n{border-color:#4C8DFF;background:rgba(76,141,255,.28);color:#DCEBFF}
 .place-item .n{
   flex:0 0 auto;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;
   font-family:var(--mono);font-size:10px;color:#8FB6F0;
@@ -2435,6 +2448,11 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                   <stop offset="0" stop-color="#35C6E0" stop-opacity=".30"/>
                   <stop offset="1" stop-color="#35C6E0" stop-opacity="0"/>
                 </radialGradient>
+                <radialGradient id="pgHalo" cx="50%" cy="50%" r="50%">
+                  <stop offset="0" stop-color="#6FE0F2" stop-opacity=".62"/>
+                  <stop offset=".55" stop-color="#4C8DFF" stop-opacity=".22"/>
+                  <stop offset="1" stop-color="#4C8DFF" stop-opacity="0"/>
+                </radialGradient>
                 <filter id="pgBlur" x="-60%" y="-60%" width="220%" height="220%">
                   <feGaussianBlur stdDeviation="12"/>
                 </filter>
@@ -2474,18 +2492,21 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
               <ellipse cx="330" cy="592" rx="34" ry="20" fill="none" stroke="#3A4A5B"/>
 
               <!-- HUD 位 -->
-              <path d="M402 262Q470 250 552 258L544 278Q470 270 410 280Z" fill="#06090C" stroke="#35414E" stroke-width="1.5"/>
-              <ellipse cx="482" cy="268" rx="82" ry="28" fill="#35C6E0" opacity=".16" filter="url(#pgBlur)"/>
-              <g transform="rotate(-3 482 268)">
-                <rect x="420" y="256" width="124" height="26" rx="9" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
-                <rect x="426" y="261" width="112" height="16" rx="6" fill="#0A0E13"/>
-                <path d="M436 269H488" stroke="#35C6E0" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+              <g class="ppos" data-pos="3">
+                <ellipse class="phalo" cx="482" cy="212" rx="172" ry="116" fill="url(#pgHalo)"/>
+                <path d="M402 262Q470 250 552 258L544 278Q470 270 410 280Z" fill="#06090C" stroke="#35414E" stroke-width="1.5"/>
+                <ellipse cx="482" cy="268" rx="82" ry="28" fill="#35C6E0" opacity=".16" filter="url(#pgBlur)"/>
+                <g transform="rotate(-3 482 268)">
+                  <rect x="420" y="256" width="124" height="26" rx="9" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
+                  <rect x="426" y="261" width="112" height="16" rx="6" fill="#0A0E13"/>
+                  <path d="M436 269H488" stroke="#35C6E0" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+                </g>
+                <path d="M432 254L396 132" stroke="#35C6E0" stroke-width="1.4" stroke-dasharray="7 10" opacity=".45" fill="none"/>
+                <path d="M532 252L566 132" stroke="#35C6E0" stroke-width="1.4" stroke-dasharray="7 10" opacity=".45" fill="none"/>
+                <ellipse cx="480" cy="152" rx="96" ry="46" fill="url(#pgGlow)"/>
+                <text x="480" y="170" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="60" font-weight="600" fill="#9AECF8" text-anchor="middle" opacity=".9">42</text>
+                <text x="480" y="192" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="14" fill="#35C6E0" text-anchor="middle" opacity=".55">KM/H</text>
               </g>
-              <path d="M432 254L396 132" stroke="#35C6E0" stroke-width="1.4" stroke-dasharray="7 10" opacity=".45" fill="none"/>
-              <path d="M532 252L566 132" stroke="#35C6E0" stroke-width="1.4" stroke-dasharray="7 10" opacity=".45" fill="none"/>
-              <ellipse cx="480" cy="152" rx="96" ry="46" fill="url(#pgGlow)"/>
-              <text x="480" y="170" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="60" font-weight="600" fill="#9AECF8" text-anchor="middle" opacity=".9">42</text>
-              <text x="480" y="192" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="14" fill="#35C6E0" text-anchor="middle" opacity=".55">KM/H</text>
 
               <!-- 车机屏幕 -->
               <rect x="646" y="266" width="306" height="172" rx="18" fill="#070A0D" stroke="#4A5A6B" stroke-width="2"/>
@@ -2499,96 +2520,110 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
               <circle cx="890" cy="308" r="8" fill="none" stroke="#26323E"/>
 
               <!-- 01 方向盘左侧支架 -->
-              <path d="M102 400V418" stroke="#3A4A5B" stroke-width="6" stroke-linecap="round"/>
-              <g>
-                <rect x="66" y="418" width="88" height="26" rx="9" fill="#0B0F14" stroke="#3A4A5B" stroke-width="1.5"/>
-                <path d="M78 426H142M78 433H142M78 440H142" stroke="#26323E" stroke-width="3" stroke-linecap="round"/>
-              </g>
-              <rect x="58" y="260" width="96" height="152" rx="22" fill="#4C8DFF" opacity=".14" filter="url(#pgBlur)" transform="rotate(-7 106 336)"/>
-              <g transform="rotate(-7 106 336)">
-                <rect x="68" y="270" width="76" height="132" rx="14" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
-                <rect x="74" y="277" width="64" height="118" rx="10" fill="#0A0E13"/>
-                <rect x="84" y="302" width="24" height="4" rx="2" fill="#26323E"/>
-                <rect x="84" y="312" width="14" height="4" rx="2" fill="#1E2A35"/>
-                <path d="M84 356A22 22 0 0 1 128 356" fill="none" stroke="#35C6E0" stroke-width="3.2" stroke-linecap="round" opacity=".85"/>
-                <circle cx="106" cy="392" r="2.5" fill="#4C8DFF"/>
+              <g class="ppos" data-pos="1">
+                <ellipse class="phalo" cx="108" cy="344" rx="112" ry="146" fill="url(#pgHalo)"/>
+                <path d="M102 400V418" stroke="#3A4A5B" stroke-width="6" stroke-linecap="round"/>
+                <g>
+                  <rect x="66" y="418" width="88" height="26" rx="9" fill="#0B0F14" stroke="#3A4A5B" stroke-width="1.5"/>
+                  <path d="M78 426H142M78 433H142M78 440H142" stroke="#26323E" stroke-width="3" stroke-linecap="round"/>
+                </g>
+                <rect x="58" y="260" width="96" height="152" rx="22" fill="#4C8DFF" opacity=".14" filter="url(#pgBlur)" transform="rotate(-7 106 336)"/>
+                <g transform="rotate(-7 106 336)">
+                  <rect x="68" y="270" width="76" height="132" rx="14" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
+                  <rect x="74" y="277" width="64" height="118" rx="10" fill="#0A0E13"/>
+                  <rect x="84" y="302" width="24" height="4" rx="2" fill="#26323E"/>
+                  <rect x="84" y="312" width="14" height="4" rx="2" fill="#1E2A35"/>
+                  <path d="M84 356A22 22 0 0 1 128 356" fill="none" stroke="#35C6E0" stroke-width="3.2" stroke-linecap="round" opacity=".85"/>
+                  <circle cx="106" cy="392" r="2.5" fill="#4C8DFF"/>
+                </g>
               </g>
 
               <!-- 02 方向盘后传统仪表位（一般是横屏） -->
-              <rect x="238" y="296" width="172" height="106" rx="20" fill="#4C8DFF" opacity=".14" filter="url(#pgBlur)" transform="rotate(-2 324 349)"/>
-              <g transform="rotate(-2 324 349)">
-                <rect x="248" y="306" width="152" height="86" rx="13" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
-                <rect x="254" y="312" width="140" height="74" rx="8" fill="#0A0E13"/>
-                <path d="M268 376A17 17 0 0 1 302 376" fill="none" stroke="#35C6E0" stroke-width="3.2" stroke-linecap="round" opacity=".85"/>
-                <rect x="314" y="324" width="36" height="4" rx="2" fill="#26323E"/>
-                <rect x="314" y="334" width="24" height="4" rx="2" fill="#1E2A35"/>
-                <rect x="314" y="352" width="58" height="9" rx="4.5" fill="#16233A"/>
-                <circle cx="384" cy="376" r="2.5" fill="#4C8DFF"/>
+              <g class="ppos" data-pos="2">
+                <ellipse class="phalo" cx="324" cy="350" rx="140" ry="98" fill="url(#pgHalo)"/>
+                <rect x="238" y="296" width="172" height="106" rx="20" fill="#4C8DFF" opacity=".14" filter="url(#pgBlur)" transform="rotate(-2 324 349)"/>
+                <g transform="rotate(-2 324 349)">
+                  <rect x="248" y="306" width="152" height="86" rx="13" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
+                  <rect x="254" y="312" width="140" height="74" rx="8" fill="#0A0E13"/>
+                  <path d="M268 376A17 17 0 0 1 302 376" fill="none" stroke="#35C6E0" stroke-width="3.2" stroke-linecap="round" opacity=".85"/>
+                  <rect x="314" y="324" width="36" height="4" rx="2" fill="#26323E"/>
+                  <rect x="314" y="334" width="24" height="4" rx="2" fill="#1E2A35"/>
+                  <rect x="314" y="352" width="58" height="9" rx="4.5" fill="#16233A"/>
+                  <circle cx="384" cy="376" r="2.5" fill="#4C8DFF"/>
+                </g>
               </g>
 
               <!-- 04 车机屏左上角夹装 -->
-              <rect x="618" y="230" width="82" height="134" rx="21" fill="#4C8DFF" opacity=".16" filter="url(#pgBlur)" transform="rotate(-8 657 296)"/>
-              <g transform="rotate(-8 657 296)">
-                <rect x="628" y="240" width="62" height="114" rx="12" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
-                <rect x="634" y="247" width="50" height="100" rx="8" fill="#0A0E13"/>
-                <rect x="642" y="262" width="24" height="4" rx="2" fill="#26323E"/>
-                <rect x="642" y="272" width="14" height="4" rx="2" fill="#1E2A35"/>
-                <path d="M642 316A16 16 0 0 1 674 316" fill="none" stroke="#35C6E0" stroke-width="3" stroke-linecap="round" opacity=".85"/>
-                <circle cx="659" cy="340" r="2.5" fill="#4C8DFF"/>
+              <g class="ppos" data-pos="4">
+                <ellipse class="phalo" cx="657" cy="296" rx="104" ry="132" fill="url(#pgHalo)"/>
+                <rect x="618" y="230" width="82" height="134" rx="21" fill="#4C8DFF" opacity=".16" filter="url(#pgBlur)" transform="rotate(-8 657 296)"/>
+                <g transform="rotate(-8 657 296)">
+                  <rect x="628" y="240" width="62" height="114" rx="12" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
+                  <rect x="634" y="247" width="50" height="100" rx="8" fill="#0A0E13"/>
+                  <rect x="642" y="262" width="24" height="4" rx="2" fill="#26323E"/>
+                  <rect x="642" y="272" width="14" height="4" rx="2" fill="#1E2A35"/>
+                  <path d="M642 316A16 16 0 0 1 674 316" fill="none" stroke="#35C6E0" stroke-width="3" stroke-linecap="round" opacity=".85"/>
+                  <circle cx="659" cy="340" r="2.5" fill="#4C8DFF"/>
+                </g>
+                <path d="M646 246H610V296" fill="none" stroke="#4C8DFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>
+                <rect x="604" y="246" width="11" height="26" rx="4" fill="#1B222A" stroke="#4C8DFF" stroke-width="2"/>
               </g>
-              <path d="M646 246H610V296" fill="none" stroke="#4C8DFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>
-              <rect x="604" y="246" width="11" height="26" rx="4" fill="#1B222A" stroke="#4C8DFF" stroke-width="2"/>
 
               <!-- 位置编号 -->
               <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="19" text-anchor="middle" fill="#9CC2FF">
-                <path d="M62 236L88 266" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
-                <circle cx="88" cy="268" r="3" fill="#4C8DFF"/>
-                <circle class="pin" cx="52" cy="218" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
-                <text class="pint" x="52" y="218" dy=".35em">01</text>
-
-                <path d="M240 252L250 294" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
-                <circle cx="252" cy="300" r="3" fill="#4C8DFF"/>
-                <circle class="pin" cx="232" cy="235" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
-                <text class="pint" x="232" y="235" dy=".35em">02</text>
-
-                <path d="M588 212L554 254" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
-                <circle cx="552" cy="258" r="3" fill="#4C8DFF"/>
-                <circle class="pin" cx="602" cy="194" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
-                <text class="pint" x="602" y="194" dy=".35em">03</text>
-
-                <path d="M728 212L690 234" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
-                <circle cx="686" cy="236" r="3" fill="#4C8DFF"/>
-                <circle class="pin" cx="740" cy="194" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
-                <text class="pint" x="740" y="194" dy=".35em">04</text>
+                <g class="ppos" data-pos="1">
+                  <path class="pind" d="M62 236L88 266" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
+                  <circle class="pindot" cx="88" cy="268" r="3" fill="#4C8DFF"/>
+                  <circle class="pin" cx="52" cy="218" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
+                  <text class="pint" x="52" y="218" dy=".35em">01</text>
+                </g>
+                <g class="ppos" data-pos="2">
+                  <path class="pind" d="M240 252L250 294" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
+                  <circle class="pindot" cx="252" cy="300" r="3" fill="#4C8DFF"/>
+                  <circle class="pin" cx="232" cy="235" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
+                  <text class="pint" x="232" y="235" dy=".35em">02</text>
+                </g>
+                <g class="ppos" data-pos="3">
+                  <path class="pind" d="M588 212L554 254" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
+                  <circle class="pindot" cx="552" cy="258" r="3" fill="#4C8DFF"/>
+                  <circle class="pin" cx="602" cy="194" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
+                  <text class="pint" x="602" y="194" dy=".35em">03</text>
+                </g>
+                <g class="ppos" data-pos="4">
+                  <path class="pind" d="M728 212L690 234" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
+                  <circle class="pindot" cx="686" cy="236" r="3" fill="#4C8DFF"/>
+                  <circle class="pin" cx="740" cy="194" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
+                  <text class="pint" x="740" y="194" dy=".35em">04</text>
+                </g>
               </g>
             </svg>
           </div>
-          <div class="place-cap"><span><b>驾驶位视角</b> · 非实车比例</span></div>
+          <div class="place-cap"><span><b>驾驶位视角</b> · 非实车比例</span><span class="place-hint">鼠标停在某一项，图里对应位置会亮起</span></div>
         </div>
 
         <div class="place-legend reveal" style="transition-delay:.08s">
-          <div class="place-item">
+          <div class="place-item" data-pos="1">
             <span class="n">01</span>
             <div>
               <b>方向盘左侧 · 手机支架<i class="rec">强烈推荐</i></b>
               <p>尤其是固定于车门把手、空调出风口的手机支架：驾驶员左右都可以看到车速，更安全。可横可竖；注意别挡左前视野、转向灯拨杆和 A 柱。</p>
             </div>
           </div>
-          <div class="place-item">
+          <div class="place-item" data-pos="2">
             <span class="n">02</span>
             <div>
               <b>方向盘后 · 传统仪表位</b>
               <p>一般是横屏。手机立在原车仪表前，读数正对视线。先确认不遮挡原车仪表、转向柱与拨杆，手机也不能碰到方向盘。</p>
             </div>
           </div>
-          <div class="place-item">
+          <div class="place-item" data-pos="3">
             <span class="n">03</span>
             <div>
               <b>HUD 位 · 附加 HUD</b>
               <p>手机平放在仪表台 HUD 凹槽，靠前风挡反射读数。夜间更清楚，白天亮度有限；别加贴膜挡视线。</p>
             </div>
           </div>
-          <div class="place-item">
+          <div class="place-item" data-pos="4">
             <span class="n">04</span>
             <div>
               <b>车机屏左上角 · 夹装</b>
@@ -2798,6 +2833,35 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
     if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
   }), { threshold: .14 });
   $$('.reveal').forEach(el => io.observe(el));
+
+  /* ---------- 摆放位置：悬停选项点亮对应位置 ---------- */
+  const placeSvg = $('.place-svg');
+  if (placeSvg) {
+    const placeStage = $('.place-stage');
+    const posGroups = $$('.ppos', placeSvg);
+    const posItems = $$('.place-item[data-pos]');
+    let pinned = null;
+    const lightUp = n => {
+      placeSvg.classList.toggle('lit', !!n);
+      posGroups.forEach(g => g.classList.toggle('on', g.dataset.pos === n));
+      posItems.forEach(it => it.classList.toggle('on', it.dataset.pos === n));
+    };
+    const revealStage = () => {
+      const r = placeStage.getBoundingClientRect();
+      const vis = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+      if (vis < r.height * .6) placeStage.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+    posItems.forEach(it => {
+      const n = it.dataset.pos;
+      it.addEventListener('pointerenter', () => lightUp(n));
+      it.addEventListener('pointerleave', () => lightUp(pinned));
+      it.addEventListener('click', () => {
+        pinned = pinned === n ? null : n;
+        lightUp(pinned);
+        if (pinned) revealStage();
+      });
+    });
+  }
 
   /* ---------- 实时时钟 ---------- */
   function tickClock() {
