@@ -358,12 +358,13 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         Text(
-                            "仪表驻车版面显示天气",
+                            "仪表显示天气",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TL.textHi,
                         )
                         Text(
-                            "用手机最近一次定位查城市，再取高德天气；30 分钟一刷，只出现在停车时钟下方。" +
+                            "用手机最近一次定位查城市，再取高德天气；30 分钟一刷，行车中照常取（走手机网络，不发蓝牙请求）。" +
+                                "驻车版面显示在时钟下方，行车版面显示右上角迷你「时间+天气」。" +
                                 "没有 Key、没给位置权限或请求失败时整块不显示，不会放占位符。",
                             style = MaterialTheme.typography.labelSmall,
                             color = TL.textLow,
@@ -556,7 +557,7 @@ fun SettingsScreen(
 
         CollapsibleSection(
             "关于与开发者",
-            "v0.3.0 · 开发者模式" + if (devMode) "开" else "关",
+            "v0.0.2 · 开发者模式" + if (devMode) "开" else "关",
         ) {
         Panel(
             title = "开发者模式",
@@ -575,9 +576,10 @@ fun SettingsScreen(
 
         SectionLabel("关于")
         Panel(tight = true) {
-            KeyValue("版本", "T-Dash v0.3.0")
+            KeyValue("版本", "T-Dash v0.0.2")
             KeyValue("通道", "蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）")
-            KeyValue("云端", "无：无账号登录、无遥测服务器；联网只用于轨迹地图底图，以及可选的高德天气")
+            KeyValue("云端", "无：无账号登录、无遥测服务器；联网只用于地图底图、定位解析，以及可选的高德天气")
+            KeyValue("本机数据", "私钥、轨迹、取证照片与个人信息只存本机")
             KeyValue("远程", "人不在车旁时需要 Fleet API，当前版本未启用")
         }
         }

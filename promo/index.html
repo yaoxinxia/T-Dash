@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>T-Dash · 不用加装一块屏，仪表盘就在手里</title>
-<meta name="description" content="T-Dash 是非官方、非盈利的 Tesla 安卓伴侣：仪表、控制、行程、事故取证、行车记录一个 App 全都有。行驶中只发一条车辆数据请求，车速 250 ms 起一刷，纯蓝牙直连，钥匙不出手机、数据不进服务器，Apache-2.0 开源免费。">
+<meta name="description" content="T-Dash 是非官方、非盈利的 Tesla 安卓伴侣：仪表、控制、行程、事故取证、行车记录一个 App 全都有。行驶中只发一条车辆数据请求，车速 250 ms 起一刷，纯蓝牙直连，钥匙不出手机、T-Dash 没有服务器，Apache-2.0 开源免费。">
 <style>
 /* ============ tokens（与 app 的 TL 主题同源） ============ */
 :root{
@@ -330,6 +330,15 @@ button.pill{font-family:inherit;cursor:pointer;align-self:flex-start}
 }
 .cl-date{font-size:13px;color:var(--mid);letter-spacing:1px;margin-top:2px}
 .cl-weather{font-size:12px;color:var(--low);letter-spacing:.4px;margin-top:3px}
+/* 行车版面右上角迷你「时间+天气」：驻车大时钟让位给车速后保住一眼可读；行车中天气取数照常（走手机网络，不碰蓝牙） */
+.cl-mini{
+  position:absolute;top:12px;right:14px;z-index:3;text-align:right;
+  opacity:0;pointer-events:none;transition:opacity .42s cubic-bezier(.4,0,.2,1);
+}
+.cl:not([data-mode="parked"]) .cl-mini{opacity:1}
+.cl-mini b{display:block;font-size:15px;font-weight:700;letter-spacing:.6px;line-height:1;font-feature-settings:"tnum";color:var(--hi)}
+.cl-mini span{display:block;font-size:10px;color:var(--low);letter-spacing:.4px;margin-top:3px}
+.cl-right .cl-mini{top:10px;right:0}
 .pk-cards{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
 .pk{
   background:rgba(27,34,42,.72);border:1px solid var(--hairline-soft);border-radius:12px;
@@ -455,12 +464,10 @@ button.pill{font-family:inherit;cursor:pointer;align-self:flex-start}
 .camtxt{font-size:10.5px;font-weight:500;line-height:1.4;color:var(--low)}
 .camgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .cam{position:relative;aspect-ratio:4/3;overflow:hidden;background:#000}
+.cam .camsvg{position:absolute;inset:0;width:100%;height:100%;display:block}
 .cam::before{
-  content:"";position:absolute;inset:0;
-  background:
-    radial-gradient(62% 34% at 50% 76%,rgba(120,160,195,.15),transparent 72%),
-    repeating-linear-gradient(90deg,transparent 0 34px,rgba(170,200,225,.06) 34px 35px),
-    linear-gradient(180deg,#101B26 0%,#0A1017 58%,#0C141B 100%);
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(120% 92% at 50% 44%,transparent 52%,rgba(0,0,0,.42) 100%);
 }
 .cam::after{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(53,198,224,.35),transparent);animation:camScan 5s linear infinite}
 .cam .clabel,.cam .ctime{
@@ -550,9 +557,49 @@ button.pill{font-family:inherit;cursor:pointer;align-self:flex-start}
 section{padding:96px 0}
 .sec-head{max-width:680px;margin-bottom:40px}
 .sec-head h2{font-size:clamp(28px,3vw,38px);line-height:1.18;letter-spacing:-.025em;margin-top:14px;font-weight:650}
+.h2-keep{white-space:nowrap}
 .sec-head p{margin-top:14px;color:var(--mid);font-size:14.5px;line-height:1.7}
 .reveal{opacity:0;transform:translateY(20px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
 .reveal.in{opacity:1;transform:none}
+
+/* ============ 摆放 ============ */
+#placement{padding-top:92px}
+.place-grid{display:grid;grid-template-columns:minmax(0,1.42fr) minmax(0,.58fr);gap:38px;align-items:center}
+.place-grid>*{min-width:0}
+.place-stage{
+  border:1px solid var(--hairline);border-radius:24px;padding:14px;
+  background:
+    radial-gradient(80% 70% at 50% 0%,rgba(53,198,224,.06),transparent 70%),
+    rgba(11,14,18,.55);
+}
+.place-svg{display:block;width:100%;height:auto;border-radius:14px}
+.place-cap{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  padding:10px 4px 0;font-size:9.5px;color:var(--low);letter-spacing:.04em;
+}
+.place-cap b{color:var(--mid);font-weight:500}
+.place-legend{display:flex;flex-direction:column;gap:9px}
+.place-item{
+  display:flex;gap:12px;padding:13px 14px;border:1px solid var(--hairline-soft);border-radius:14px;
+  background:rgba(20,25,32,.45);transition:border-color .25s,background .25s;
+}
+.place-item:hover{border-color:#33414F;background:rgba(20,25,32,.72)}
+.place-item .n{
+  flex:0 0 auto;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;
+  font-family:var(--mono);font-size:10px;color:#8FB6F0;
+  border:1px solid rgba(76,141,255,.35);background:rgba(76,141,255,.1);margin-top:1px;
+}
+.place-item b{display:block;font-size:12.5px;color:var(--hi);font-weight:600;line-height:1.4}
+.place-item .rec{
+  font-style:normal;font-size:8.5px;font-weight:500;color:var(--good);letter-spacing:.08em;
+  border:1px solid rgba(59,196,107,.35);background:rgba(59,196,107,.08);
+  border-radius:999px;padding:2px 7px;margin-left:7px;vertical-align:1px;white-space:nowrap;
+}
+.place-item p{margin-top:4px;font-size:10.8px;line-height:1.6;color:var(--low)}
+.place-note{
+  margin-top:4px;font-size:10px;line-height:1.7;color:var(--low);
+  border-left:2px solid var(--hairline);padding-left:12px;
+}
 
 /* ============ 延迟 ============ */
 .latency-grid{display:grid;grid-template-columns:.92fr 1.08fr;gap:46px;align-items:center}
@@ -587,7 +634,7 @@ section{padding:96px 0}
 
 /* ============ 模拟器 ============ */
 #screens{padding-top:92px}
-.sim{display:grid;grid-template-columns:226px 1fr;gap:44px;align-items:start}
+.sim{display:grid;grid-template-columns:226px minmax(0,1fr) 316px;gap:40px;align-items:start}
 .sim-nav{position:sticky;top:86px;display:flex;flex-direction:column;gap:16px}
 .sim-group{display:flex;flex-direction:column;gap:3px}
 .sim-group>span{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--low);padding:0 10px 5px}
@@ -612,7 +659,7 @@ section{padding:96px 0}
   font-size:10.5px;font-weight:700;cursor:pointer;transition:background .2s,color .2s;
 }
 .pd-switch button.on{background:var(--accent-soft);color:var(--accent)}
-.sim-copy{width:384px;padding-top:2px}
+.sim-copy{max-width:560px;padding-top:2px}
 .sim-copy h3{font-size:16px;font-weight:620;letter-spacing:-.01em}
 .sim-copy p{margin-top:6px;font-size:11.5px;line-height:1.65;color:var(--mid)}
 .sim-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
@@ -627,6 +674,13 @@ section{padding:96px 0}
   font-family:inherit;font-size:10px;font-weight:700;cursor:pointer;transition:background .2s,color .2s;
 }
 .orient-switch button.on{background:var(--accent-soft);color:var(--accent)}
+
+@media (min-width:1101px){
+  .sim-copy{position:sticky;top:86px}
+  .sim.wide{grid-template-columns:226px minmax(0,1fr)}
+  .sim.wide .sim-copy{grid-column:2;grid-row:2;position:static;justify-self:center;width:min(600px,100%);text-align:center}
+  .sim.wide .sim-copy .sim-chips{justify-content:center}
+}
 
 /* ============ 横屏（车机横放，仪表页专用） ============ */
 /* 真实 Compose：横屏没有底栏，左侧换成 60dp 竖排 SideRail；仪表页是三联栏
@@ -757,6 +811,20 @@ section{padding:96px 0}
 .note a,.foot .meta a{color:var(--mid);border-bottom:1px solid var(--hairline);transition:color .2s,border-color .2s}
 .note a:hover,.foot .meta a:hover{color:var(--hi);border-bottom-color:var(--mid)}
 
+/* ============ 说明 ============ */
+.notes{padding:0 0 78px}
+.notes-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.notes-head h2{font-size:17px;font-weight:600;letter-spacing:.01em}
+.notes-grid{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 44px;
+  border-top:1px solid var(--hairline-soft);padding-top:24px;
+}
+.notes-grid p{font-size:11.5px;line-height:1.75;color:var(--low)}
+.notes-grid b{
+  display:block;margin-bottom:3px;font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--mid);font-weight:600;
+}
+
 /* ============ footer ============ */
 footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
 .foot{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap}
@@ -775,6 +843,9 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   .hero-copy,.hero-pwrap,.sim-nav,.sim-stage{min-width:0}
   .hero-pwrap{justify-content:flex-start;padding-left:4px}
   .latency-grid{grid-template-columns:1fr;gap:28px}
+  .place-grid{grid-template-columns:1fr;gap:24px}
+  .place-legend{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .place-note{grid-column:1/-1}
   .security{grid-template-columns:1fr;padding:30px}
   .sec-visual{min-height:220px}
   .sim{grid-template-columns:minmax(0,1fr);gap:22px}
@@ -809,9 +880,17 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   .nav-links{display:none}
   .path-row{grid-template-columns:60px 1fr 78px;gap:8px}
   .path-badge{font-size:9px}
+  .place-stage{padding:10px;border-radius:20px}
+  .place-legend{grid-template-columns:1fr}
   .security{padding:22px;border-radius:20px}
+  .notes{padding-bottom:56px}
+  .notes-grid{grid-template-columns:1fr;gap:16px}
   .foot .meta{text-align:left}
   .hero-pwrap{justify-content:center}
+}
+@media (max-width:520px){
+  .place-svg .pin{r:34px}
+  .place-svg .pint{font-size:30px}
 }
 @media (max-width:380px){
   .pwrap,.sim-stage{--ps:.78}
@@ -835,10 +914,11 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <span class="mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="#3E6AE1"/><g transform="translate(12 12.6) scale(0.3) translate(-54 -55)"><path fill="#FFFFFF" d="M54,30 L78,42 L54,54 L30,42 Z"/><path fill="#FFFFFF" d="M38,50 L54,58 L70,50 L70,60 L54,68 L38,60 Z"/><path fill="#FFFFFF" d="M42,66 L54,72 L66,66 L66,74 L54,80 L42,74 Z"/></g></svg>
       </span>
-      T-Dash <small>v0.0.1</small>
+      T-Dash <small>v0.0.2</small>
     </div>
     <nav class="nav-links" aria-label="页面导航">
       <a href="#screens">功能</a>
+      <a href="#placement">摆放</a>
       <a href="#latency">延迟</a>
       <a href="#security">安全</a>
       <a href="#free">开源免费</a>
@@ -855,15 +935,15 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <div class="hero-copy">
         <span class="eyebrow">Tesla companion · 非官方 · 非盈利 · 纯蓝牙直连</span>
         <h1>不用加装一块屏，<br><span class="grad">仪表盘就在手里。</span></h1>
-        <p class="lead">仪表、控制、行程、事故取证、行车记录，<b>一个 App 全都有</b>。行驶中只发<b>一条</b>车辆数据请求，车速 <b>250 ms</b> 起一刷，指令 <b>50–300 ms</b> 往返；蓝牙直连，钥匙不出手机，数据不进服务器。<b>开源、免费、协议开放</b>。</p>
+        <p class="lead">仪表、控制、行程、事故取证、行车记录，<b>一个 App 全都有</b>。行驶中只发<b>一条</b>车辆数据请求，车速 <b>250 ms</b> 起一刷，指令 <b>50–300 ms</b> 往返；蓝牙直连，钥匙不出手机，<b>T-Dash 没有服务器</b>，也没有遥测。开源、免费、协议开放。</p>
         <div class="chips">
           <span class="chip"><i></i>九块屏 · 一个 App</span>
           <span class="chip blue"><i></i>无需账号 · 没有订阅</span>
           <span class="chip cyan"><i></i>Apache-2.0 开源</span>
         </div>
         <div class="cta">
-          <a class="btn btn-primary" href="#screens">看看它能做什么 <span aria-hidden="true">→</span></a>
-          <a class="btn btn-ghost" href="#start">三步连上车</a>
+          <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.2/T-Dash-0.0.2.apk" target="_blank" rel="noopener noreferrer">下载 APK · v0.0.2 <span aria-hidden="true">↓</span></a>
+          <a class="btn btn-ghost" href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">GitHub 仓库</a>
         </div>
         <p class="hero-note">手机在演示一段完整行程：P → D → 加速 → 减速 → P，六项读数同步推进；界面按当前 Compose 排版重绘。</p>
       </div>
@@ -897,6 +977,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                         <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
                       </div>
                     </div>
+                    <div class="cl-mini"><b data-clock>14:32</b><span>多云 18°</span></div>
                   </div>
 
                   <div class="cl-bottom">
@@ -970,7 +1051,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
     <section id="screens">
       <div class="sec-head reveal">
         <span class="eyebrow">Core features</span>
-        <h2>它不只是仪表盘。</h2>
+        <h2>多功能：<span class="h2-keep">它不只是仪表盘。</span></h2>
         <p>仪表把车速、功率、档位和本次行程压进一屏；控制页管门锁、空调、座椅和充电，能点的按钮都跟着车辆真实状态亮灭；统计页把车速 / 功率曲线和本机 GPS 轨迹留在一处；工具页收着快捷启动、事故取证、行车记录仪、零百计时和车机皮肤。九块屏各管一件事，点开就是那一件。</p>
       </div>
 
@@ -978,7 +1059,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
         <nav class="sim-nav reveal" aria-label="界面目录">
           <div class="sim-group">
             <span>日常</span>
-            <button type="button" class="sim-link on" data-view="cluster" data-tool="" data-kicker="01 · 仪表" data-title="仪表 · 行车版面" data-desc="大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 后速度环缩到右下角，时钟与三张状态卡补位，功率和行程卡留在原位。" data-chips="状态栏|阈值轨|270° 功率弧|路径小图">仪表 <small>行车 / 驻车 / 横屏</small></button>
+            <button type="button" class="sim-link on" data-view="cluster" data-tool="" data-kicker="01 · 仪表" data-title="仪表 · 行车版面" data-desc="大数字车速按 5 段配色，有没有超速瞟一眼就能发现；下面一条阈值轨，右侧是本次行程的形状与六项读数。挂 P 后速度环缩到右下角，时钟与三张状态卡补位，功率和行程卡留在原位。" data-chips="状态栏|阈值轨|270° 功率弧|路径小图">仪表 <small>行车 / 驻车 / 横屏</small></button>
             <button type="button" class="sim-link" data-view="control" data-tool="" data-kicker="02 · 控制" data-title="控制 · 状态先行" data-desc="顶部一排是车辆真实状态，下面是折叠分区。已经落锁时「落锁」置灰，后备箱关着时「关后备箱」置灰——按钮跟着状态走，不跟着旧读数走。" data-chips="9 枚状态胶囊|6 个折叠分区|实测延迟">控制 <small>车锁 / 空调 / 充电</small></button>
             <button type="button" class="sim-link" data-view="stats" data-tool="" data-kicker="03 · 统计" data-title="统计 · 本次启动全量保留" data-desc="车速与功率曲线可以分别展开，下面是行程条和 GPS 轨迹。地图只是垫底，轨迹颜色来自速度分档；原始采样点一个不删。" data-chips="车速曲线|行程切换|300dp 地图">统计 <small>曲线 / 轨迹</small></button>
           </div>
@@ -1043,6 +1124,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                             <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
                           </div>
                         </div>
+                        <div class="cl-mini"><b data-clock>14:32</b><span>多云 18°</span></div>
                       </div>
 
                       <div class="cl-bottom">
@@ -1133,6 +1215,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                           </div>
                         </div>
                         <div class="cl-right">
+                          <div class="cl-mini"><b data-clock>14:32</b><span>多云 18°</span></div>
                           <div class="cl-trip">
                             <div class="route">
                               <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
@@ -1448,7 +1531,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                       </div>
                     </div>
 
-                    <div class="note-inline" id="statsNote">采样间隔：行驶 250–500 ms（按往返自适应）/ 停车 600 ms，只读 DRIVE（车速、功率、里程、档位）；电量与温度 2.5 s，仅驻车时读取。车辆数据全部来自蓝牙直连；联网只用于地图底图和可选的高德天气（驻车时显示）。</div>
+                    <div class="note-inline" id="statsNote">采样间隔：行驶 250–500 ms（按往返自适应）/ 停车 600 ms，只读 DRIVE（车速、功率、里程、档位）；电量与温度 2.5 s，仅驻车时读取。车辆数据全部来自蓝牙直连；联网只用于地图底图、定位解析和可选的高德天气（驻车时显示）。</div>
                     <button type="button" class="pill on" id="clearChart">清空曲线</button>
                   </div>
 
@@ -1696,27 +1779,240 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
 
                           <div class="camgrid" id="dcCams">
                             <div class="cam" data-cam="front">
+                              <svg class="camsvg" viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <defs>
+                                  <linearGradient id="cfSky" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0" stop-color="#7D8D9E"/><stop offset=".55" stop-color="#48545F"/><stop offset="1" stop-color="#2A333C"/>
+                                  </linearGradient>
+                                  <linearGradient id="cfRoad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0" stop-color="#535D67"/><stop offset="1" stop-color="#252C33"/>
+                                  </linearGradient>
+                                </defs>
+                                <rect width="160" height="120" fill="url(#cfSky)"/>
+                                <path d="M0 59V45h10v-9h8v10h10v13h9V35h11v24h8V31h11v28h9V39h12v20h10V29h12v30h10V37h12v22h9V47h11v12H0Z" fill="#1E2833"/>
+                                <g fill="#3C4C5C" opacity=".75">
+                                  <rect x="4" y="50" width="3" height="4"/><rect x="13" y="43" width="2" height="3"/>
+                                  <rect x="21" y="52" width="3" height="4"/><rect x="34" y="46" width="3" height="4"/>
+                                  <rect x="45" y="40" width="2" height="3"/><rect x="58" y="50" width="3" height="4"/>
+                                  <rect x="70" y="44" width="2" height="3"/><rect x="96" y="47" width="3" height="4"/>
+                                  <rect x="108" y="40" width="2" height="3"/><rect x="120" y="50" width="3" height="4"/>
+                                  <rect x="133" y="42" width="3" height="4"/><rect x="146" y="51" width="2" height="3"/>
+                                </g>
+                                <path d="M0 58h160v62H0Z" fill="#1A222A"/>
+                                <path d="M0 120l44-62h72l44 62Z" fill="url(#cfRoad)"/>
+                                <path d="M44 58 0 120h6l46-60Z" fill="#CBD5DC" opacity=".55"/>
+                                <path d="M116 58l44 62h-6l-46-60Z" fill="#CBD5DC" opacity=".55"/>
+                                <g fill="#D6DEE4">
+                                  <path d="M79.4 60h1.2l.2 7h-1.6Z" opacity=".85"/>
+                                  <path d="M78.7 73h2.6l.4 9h-3.4Z" opacity=".8"/>
+                                  <path d="M77.3 89h5.4l.8 13h-7Z" opacity=".75"/>
+                                </g>
+                                <ellipse cx="80" cy="88" rx="18" ry="3.2" fill="#0B1016" opacity=".5"/>
+                                <path d="M68 86V76q0-4 4-6.5l3-4h10l3 4q4 2.5 4 6.5v10Z" fill="#C8D2D9"/>
+                                <path d="M72 76h16l-1.8-4.5h-12.4Z" fill="#28323B"/>
+                                <path d="M68 82h24v1.6H68Z" fill="#8E9BA6" opacity=".55"/>
+                                <rect x="69.5" y="83" width="5" height="2.4" rx="1" fill="#E05552"/>
+                                <rect x="85.5" y="83" width="5" height="2.4" rx="1" fill="#E05552"/>
+                                <rect x="67" y="86" width="4" height="2" fill="#1A2027"/>
+                                <rect x="89" y="86" width="4" height="2" fill="#1A2027"/>
+                              </svg>
                               <span class="clabel">前视</span>
                               <span class="cspeed"><b>42</b><em>km/h</em><svg viewBox="0 0 44 22" aria-hidden="true"><polyline points="0,17 6,15 12,16 18,11 24,12 30,8 36,9 44,5" fill="none" stroke="#38BDF8" stroke-width="2"/><line x1="0" y1="13" x2="44" y2="13" stroke="rgba(255,255,255,.4)" stroke-width="1"/></svg></span>
                               <span class="ctime">15:32:14</span>
                             </div>
                             <div class="cam" data-cam="back">
+                              <svg class="camsvg" viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <defs>
+                                  <linearGradient id="cbSky" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0" stop-color="#8593A0"/><stop offset=".55" stop-color="#4C5760"/><stop offset="1" stop-color="#2C343C"/>
+                                  </linearGradient>
+                                  <linearGradient id="cbRoad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0" stop-color="#4C565F"/><stop offset="1" stop-color="#222A31"/>
+                                  </linearGradient>
+                                </defs>
+                                <rect width="160" height="120" fill="url(#cbSky)"/>
+                                <path d="M0 57V43h9v-8h9v9h9v13h9V34h10v23h9V30h11v27h10V37h11v20h10V29h11v28h10V36h11v21h10V44h11v13H0Z" fill="#1C2630"/>
+                                <g fill="#3A4A59" opacity=".7">
+                                  <rect x="6" y="47" width="2" height="3"/><rect x="18" y="40" width="3" height="4"/>
+                                  <rect x="36" y="45" width="2" height="3"/><rect x="50" y="38" width="3" height="4"/>
+                                  <rect x="66" y="47" width="2" height="3"/><rect x="84" y="41" width="3" height="4"/>
+                                  <rect x="101" y="46" width="2" height="3"/><rect x="117" y="39" width="3" height="4"/>
+                                  <rect x="134" y="47" width="2" height="3"/><rect x="148" y="43" width="3" height="4"/>
+                                </g>
+                                <!-- 行道树 -->
+                                <g fill="#1F2C28">
+                                  <rect x="20" y="46" width="2" height="14"/>
+                                  <circle cx="21" cy="42" r="8"/><circle cx="16" cy="46" r="6"/><circle cx="27" cy="46" r="6"/>
+                                  <rect x="140" y="45" width="2" height="15"/>
+                                  <circle cx="141" cy="41" r="8"/><circle cx="135" cy="45" r="6"/><circle cx="147" cy="45" r="6"/>
+                                </g>
+                                <path d="M0 57h160v63H0Z" fill="#192128"/>
+                                <path d="M0 120l42-63h76l42 63Z" fill="url(#cbRoad)"/>
+                                <path d="M42 57 0 120h6l44-61Z" fill="#CBD5DC" opacity=".5"/>
+                                <path d="M118 57l42 63h-6l-44-61Z" fill="#CBD5DC" opacity=".5"/>
+                                <g fill="#D6DEE4">
+                                  <path d="M79.4 59h1.2l.2 7h-1.6Z" opacity=".8"/>
+                                  <path d="M78.7 72h2.6l.4 9h-3.4Z" opacity=".75"/>
+                                  <path d="M77.3 88h5.4l.8 13h-7Z" opacity=".7"/>
+                                  <path d="M75 108h8l1.2 12h-10.4Z" opacity=".65"/>
+                                </g>
+                                <!-- 远处驶离的车 -->
+                                <g opacity=".9">
+                                  <path d="M74 68h9v6h-9Z" fill="#39434D"/>
+                                  <rect x="74.6" y="69.4" width="2" height="1.6" fill="#D8635F"/>
+                                  <rect x="80.2" y="69.4" width="2" height="1.6" fill="#D8635F"/>
+                                </g>
+                              </svg>
                               <span class="clabel">后视</span>
                               <span class="ctime">15:32:14</span>
                             </div>
                             <div class="cam" data-cam="left_repeater">
+                              <svg class="camsvg" viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <defs>
+                                  <linearGradient id="clSky" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0" stop-color="#8795A2"/><stop offset="1" stop-color="#4B5660"/>
+                                  </linearGradient>
+                                  <linearGradient id="clRoad" x1="0" y1="0" x2="1" y2="1">
+                                    <stop offset="0" stop-color="#525C66"/><stop offset="1" stop-color="#222A31"/>
+                                  </linearGradient>
+                                </defs>
+                                <rect width="160" height="120" fill="url(#clSky)"/>
+                                <path d="M0 42V28h20v-8h18v10h22V18h20v14h24v-8h26v10h30v8Z" fill="#1D2731"/>
+                                <g fill="#384754" opacity=".7">
+                                  <rect x="6" y="32" width="3" height="4"/><rect x="16" y="26" width="2" height="3"/>
+                                  <rect x="28" y="34" width="3" height="4"/><rect x="44" y="24" width="2" height="3"/>
+                                  <rect x="58" y="33" width="3" height="4"/><rect x="76" y="28" width="2" height="3"/>
+                                  <rect x="92" y="34" width="3" height="4"/><rect x="110" y="30" width="2" height="3"/>
+                                  <rect x="126" y="35" width="3" height="4"/><rect x="142" y="32" width="2" height="3"/>
+                                </g>
+                                <path d="M0 42h160v78H0Z" fill="url(#clRoad)"/>
+                                <path d="M0 42h34L14 120H0Z" fill="#161E25"/>
+                                <path d="M34 42 14 120h4l20-78Z" fill="#7E8A94" opacity=".45"/>
+                                <g fill="#20302A">
+                                  <rect x="11" y="36" width="2" height="14"/>
+                                  <circle cx="12" cy="32" r="9"/><circle cx="22" cy="37" r="7"/><circle cx="4" cy="38" r="6"/>
+                                </g>
+                                <g stroke="#D3DCE3">
+                                  <path d="M131 45 122 55" stroke-width="2" opacity=".8"/>
+                                  <path d="M120 60 109 74" stroke-width="3" opacity=".78"/>
+                                  <path d="M106 80 93 98" stroke-width="4" opacity=".74"/>
+                                  <path d="M89 105 74 120" stroke-width="5" opacity=".7"/>
+                                </g>
+                                <!-- 对向车 -->
+                                <g transform="translate(56 56) scale(.55)">
+                                  <ellipse cx="12" cy="30" rx="14" ry="2.4" fill="#0B1016" opacity=".55"/>
+                                  <path d="M0 28V16q0-4 5-6l3-5h8l3 5q5 2 5 6v12Z" fill="#D2D9DE"/>
+                                  <path d="M6 16h12l-2-4.5H8Z" fill="#26313A"/>
+                                  <rect x="1.5" y="22" width="4" height="2.4" rx="1" fill="#E8EEF2"/>
+                                  <rect x="18.5" y="22" width="4" height="2.4" rx="1" fill="#E8EEF2"/>
+                                  <rect x="1" y="27.4" width="5" height="2.6" fill="#141A20"/>
+                                  <rect x="18" y="27.4" width="5" height="2.6" fill="#141A20"/>
+                                </g>
+                                <!-- 本车左侧车身 -->
+                                <path d="M160 120V82q-24 8-38 38Z" fill="#0B1117"/>
+                                <path d="M160 82q-24 8-38 38" fill="none" stroke="#6C8090" stroke-width="1.2" opacity=".55"/>
+                                <path d="M160 92q-12 4-19 16" fill="none" stroke="#94A6B4" stroke-width=".7" opacity=".25"/>
+                              </svg>
                               <span class="clabel">左后侧</span>
                               <span class="ctime">15:32:14</span>
                             </div>
                             <div class="cam" data-cam="right_repeater">
+                              <svg class="camsvg" viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <defs>
+                                  <linearGradient id="crSky" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0" stop-color="#8B99A6"/><stop offset="1" stop-color="#4E5963"/>
+                                  </linearGradient>
+                                  <linearGradient id="crRoad" x1="1" y1="0" x2="0" y2="1">
+                                    <stop offset="0" stop-color="#525C66"/><stop offset="1" stop-color="#222A31"/>
+                                  </linearGradient>
+                                </defs>
+                                <rect width="160" height="120" fill="url(#crSky)"/>
+                                <path d="M160 42V28h-20v-8h-18v10h-22V18h-20v14h-24v-8H30v10H0v8Z" fill="#1D2731"/>
+                                <g fill="#384754" opacity=".7">
+                                  <rect x="151" y="32" width="3" height="4"/><rect x="141" y="26" width="2" height="3"/>
+                                  <rect x="129" y="34" width="3" height="4"/><rect x="113" y="24" width="2" height="3"/>
+                                  <rect x="99" y="33" width="3" height="4"/><rect x="81" y="28" width="2" height="3"/>
+                                  <rect x="65" y="34" width="3" height="4"/><rect x="47" y="30" width="2" height="3"/>
+                                  <rect x="31" y="35" width="3" height="4"/><rect x="15" y="32" width="2" height="3"/>
+                                </g>
+                                <path d="M0 42h160v78H0Z" fill="url(#crRoad)"/>
+                                <path d="M160 42h-34l20 78h14Z" fill="#161E25"/>
+                                <path d="M126 42l20 78h-4l-20-78Z" fill="#7E8A94" opacity=".45"/>
+                                <g fill="#20302A">
+                                  <rect x="147" y="36" width="2" height="14"/>
+                                  <circle cx="148" cy="32" r="9"/><circle cx="138" cy="37" r="7"/><circle cx="156" cy="38" r="6"/>
+                                </g>
+                                <g stroke="#D3DCE3">
+                                  <path d="M29 45 38 55" stroke-width="2" opacity=".8"/>
+                                  <path d="M40 60 51 74" stroke-width="3" opacity=".78"/>
+                                  <path d="M54 80 67 98" stroke-width="4" opacity=".74"/>
+                                  <path d="M71 105 86 120" stroke-width="5" opacity=".7"/>
+                                </g>
+                                <!-- 路边停车 -->
+                                <g transform="translate(112 57) scale(.62)">
+                                  <ellipse cx="14" cy="30" rx="14" ry="2.4" fill="#0B1016" opacity=".5"/>
+                                  <path d="M0 28V14q0-5 5-7l4-4h10l4 4q5 2 5 7v14Z" fill="#3A4550"/>
+                                  <path d="M6 14h16l-2.4-4h-11Z" fill="#1B232B"/>
+                                  <rect x="1" y="21" width="4" height="2" rx="1" fill="#B8635F" opacity=".8"/>
+                                  <rect x="23" y="21" width="4" height="2" rx="1" fill="#B8635F" opacity=".8"/>
+                                  <rect x="1" y="27.4" width="5" height="2.6" fill="#141A20"/>
+                                  <rect x="22" y="27.4" width="5" height="2.6" fill="#141A20"/>
+                                </g>
+                                <!-- 本车右侧车身 -->
+                                <path d="M0 120V82q24 8 38 38Z" fill="#0B1117"/>
+                                <path d="M0 82q24 8 38 38" fill="none" stroke="#6C8090" stroke-width="1.2" opacity=".55"/>
+                                <path d="M0 92q12 4 19 16" fill="none" stroke="#94A6B4" stroke-width=".7" opacity=".25"/>
+                              </svg>
                               <span class="clabel">右后侧</span>
                               <span class="ctime">15:32:14</span>
                             </div>
                             <div class="cam" data-cam="left_pillar" style="display:none">
+                              <svg class="camsvg" viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <defs>
+                                  <linearGradient id="cplStreet" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0" stop-color="#8A98A5"/><stop offset=".55" stop-color="#59646F"/><stop offset="1" stop-color="#2C353E"/>
+                                  </linearGradient>
+                                </defs>
+                                <rect width="160" height="120" fill="#05080B"/>
+                                <rect x="12" y="16" width="136" height="80" rx="5" fill="url(#cplStreet)"/>
+                                <g fill="#3B4854" opacity=".45">
+                                  <rect x="20" y="30" width="26" height="50"/><rect x="56" y="24" width="14" height="60"/>
+                                  <rect x="90" y="34" width="30" height="50"/><rect x="126" y="26" width="14" height="58"/>
+                                </g>
+                                <g stroke="#D8E0E6" stroke-linecap="round" opacity=".3">
+                                  <path d="M18 60h58" stroke-width="3"/><path d="M92 70h46" stroke-width="2"/>
+                                  <path d="M28 82h34" stroke-width="2"/>
+                                </g>
+                                <path d="M0 0h160v16c-42 6-84 8-160 6Z" fill="#05080B"/>
+                                <path d="M0 120h160V98c-48-6-100-4-160 8Z" fill="#05080B"/>
+                                <rect x="148" y="0" width="12" height="120" fill="#05080B"/>
+                              </svg>
                               <span class="clabel">左B柱</span>
                               <span class="ctime">15:32:14</span>
                             </div>
                             <div class="cam" data-cam="right_pillar" style="display:none">
+                              <svg class="camsvg" viewBox="0 0 160 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                                <defs>
+                                  <linearGradient id="cprStreet" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0" stop-color="#8F9CA8"/><stop offset=".55" stop-color="#5B6671"/><stop offset="1" stop-color="#2E373F"/>
+                                  </linearGradient>
+                                </defs>
+                                <rect width="160" height="120" fill="#05080B"/>
+                                <g transform="translate(160 0) scale(-1 1)">
+                                  <rect x="12" y="16" width="136" height="80" rx="5" fill="url(#cprStreet)"/>
+                                  <g fill="#3B4854" opacity=".45">
+                                    <rect x="20" y="30" width="26" height="50"/><rect x="56" y="24" width="14" height="60"/>
+                                    <rect x="90" y="34" width="30" height="50"/><rect x="126" y="26" width="14" height="58"/>
+                                  </g>
+                                  <g stroke="#D8E0E6" stroke-linecap="round" opacity=".3">
+                                    <path d="M18 60h58" stroke-width="3"/><path d="M92 70h46" stroke-width="2"/>
+                                    <path d="M28 82h34" stroke-width="2"/>
+                                  </g>
+                                  <path d="M0 0h160v16c-42 6-84 8-160 6Z" fill="#05080B"/>
+                                  <path d="M0 120h160V98c-48-6-100-4-160 8Z" fill="#05080B"/>
+                                  <rect x="148" y="0" width="12" height="120" fill="#05080B"/>
+                                </g>
+                              </svg>
                               <span class="clabel">右B柱</span>
                               <span class="ctime">15:32:14</span>
                             </div>
@@ -2047,7 +2343,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
 
                     <div class="coll">
                       <button type="button" class="coll-h" aria-expanded="false">
-                        <div><b>关于与开发者</b><span>v0.0.1 · 开发者模式关</span></div>
+                        <div><b>关于与开发者</b><span>v0.0.2 · 开发者模式关</span></div>
                         <i>▸</i>
                       </button>
                       <div class="coll-b">
@@ -2057,9 +2353,10 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                         </div>
                         <div class="slabel">关于</div>
                         <div class="panel tight">
-                          <div class="kv"><span>版本</span><b>T-Dash v0.0.1</b></div>
+                          <div class="kv"><span>版本</span><b>T-Dash v0.0.2</b></div>
                           <div class="kv"><span>通道</span><b>蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）</b></div>
-                          <div class="kv"><span>云端</span><b>无：无账号登录、无遥测服务器；联网只用于轨迹地图底图，以及可选的高德天气</b></div>
+                          <div class="kv"><span>云端</span><b>无：无账号登录、无遥测服务器；联网只用于地图底图、定位解析，以及可选的高德天气</b></div>
+                          <div class="kv"><span>本机数据</span><b>私钥、轨迹、取证照片与个人信息只存本机</b></div>
                           <div class="kv"><span>远程</span><b>人不在车旁时需要 Fleet API，当前版本未启用</b></div>
                         </div>
                       </div>
@@ -2085,12 +2382,211 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
             </div>
           </div>
 
-          <div class="sim-copy">
-            <h3 id="stageTitle">仪表 · 行车版面</h3>
-            <p id="stageDesc">大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 自动换成时钟、三张状态卡和右下角速度环。</p>
-            <div class="sim-chips" id="stageChips"><span>状态栏</span><span>阈值轨</span><span>270° 功率弧</span><span>路径小图</span></div>
-            <div class="sim-hint" id="stageHint"><b>可以操作：</b>P / D 换版面、右上角「竖屏 / 横屏」切成车机横放；控制页解锁、开闭件会同步更新状态胶囊与最近命令；设置页能改速度分档，仪表立刻跟着变。</div>
+        </div>
+
+        <div class="sim-copy">
+          <h3 id="stageTitle">仪表 · 行车版面</h3>
+          <p id="stageDesc">大数字车速按 5 段配色，有没有超速瞟一眼就能发现；下面一条阈值轨，右侧是本次行程的形状与六项读数。挂 P 自动换成时钟、三张状态卡和右下角速度环。</p>
+          <div class="sim-chips" id="stageChips"><span>状态栏</span><span>阈值轨</span><span>270° 功率弧</span><span>路径小图</span></div>
+          <div class="sim-hint" id="stageHint"><b>可以操作：</b>P / D 换版面、右上角「竖屏 / 横屏」切成车机横放；控制页解锁、开闭件会同步更新状态胶囊与最近命令；设置页能改速度分档，仪表立刻跟着变。</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ 摆放 ============ -->
+  <div class="wrap">
+    <section id="placement">
+      <div class="sec-head reveal">
+        <span class="eyebrow">Mounting positions</span>
+        <h2>手机放哪儿，<span class="h2-keep">都能当仪表。</span></h2>
+        <p>T-Dash 不挑安装位。方向盘左侧可横可竖，传统仪表位一般是横屏，平放在 HUD 槽里，或夹到车机屏左上角——同一块仪表，四种顺手的摆法。</p>
+      </div>
+      <div class="place-grid">
+        <div class="place-stage reveal">
+          <div class="place-scroll">
+            <svg class="place-svg" viewBox="0 0 1000 680" role="img" aria-labelledby="placeSvgTitle placeSvgDesc">
+              <title id="placeSvgTitle">手机仪表盘的四种摆放位置</title>
+              <desc id="placeSvgDesc">驾驶位视角示意：01 方向盘左侧手机支架，02 方向盘后的传统仪表位，03 仪表台 HUD 位，04 车机屏幕左上角夹装。</desc>
+              <defs>
+                <linearGradient id="pgSky" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#35C6E0" stop-opacity=".10"/>
+                  <stop offset=".6" stop-color="#35C6E0" stop-opacity=".025"/>
+                  <stop offset="1" stop-color="#35C6E0" stop-opacity="0"/>
+                </linearGradient>
+                <linearGradient id="pgDash" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#161D25"/>
+                  <stop offset="1" stop-color="#0B0F14"/>
+                </linearGradient>
+                <linearGradient id="pgRoad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#1A232C" stop-opacity="0"/>
+                  <stop offset="1" stop-color="#1A232C" stop-opacity=".55"/>
+                </linearGradient>
+                <radialGradient id="pgGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0" stop-color="#35C6E0" stop-opacity=".30"/>
+                  <stop offset="1" stop-color="#35C6E0" stop-opacity="0"/>
+                </radialGradient>
+                <filter id="pgBlur" x="-60%" y="-60%" width="220%" height="220%">
+                  <feGaussianBlur stdDeviation="12"/>
+                </filter>
+              </defs>
+
+              <rect x=".5" y=".5" width="999" height="679" rx="22" fill="#0A0D11" stroke="#232C36"/>
+
+              <!-- 前风挡 -->
+              <path d="M1 22Q1 1 22 1H978Q999 1 999 22V300Q500 252 1 300Z" fill="url(#pgSky)"/>
+              <path d="M1 300L92 1" stroke="#232E39" stroke-width="2" fill="none"/>
+              <path d="M999 300L908 1" stroke="#232E39" stroke-width="2" fill="none"/>
+              <path d="M1 238Q500 214 999 238" stroke="#26333F" stroke-width="1.5" fill="none"/>
+              <path d="M520 236L382 680H658L520 236Z" fill="url(#pgRoad)"/>
+              <path d="M520 246V300" stroke="#33414F" stroke-width="2" stroke-dasharray="9 13" fill="none"/>
+              <path d="M470 300L520 236M570 300L520 236" stroke="#24313D" stroke-width="1.5" fill="none"/>
+
+              <!-- 仪表台 -->
+              <path d="M1 300Q500 252 999 300V679H1Z" fill="url(#pgDash)"/>
+              <path d="M1 300Q500 252 999 300" stroke="#35414E" stroke-width="2" fill="none"/>
+              <path d="M1 376Q500 332 999 376" stroke="#1B242D" stroke-width="1.5" fill="none"/>
+
+              <!-- 方向盘后的原车仪表 -->
+              <rect x="258" y="300" width="144" height="96" rx="14" fill="#070A0D" stroke="#35414E" stroke-width="1.5"/>
+              <rect x="266" y="308" width="128" height="80" rx="9" fill="#0A0E13"/>
+              <rect x="280" y="322" width="34" height="4" rx="2" fill="#2E3A46"/>
+              <rect x="280" y="332" width="20" height="4" rx="2" fill="#24313D"/>
+              <text x="330" y="372" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="34" font-weight="600" fill="#46586A" text-anchor="middle">0</text>
+              <rect x="372" y="320" width="14" height="44" rx="4" fill="#202A33"/>
+
+              <!-- 方向盘 -->
+              <path d="M266 592H136" stroke="#26323D" stroke-width="18" stroke-linecap="round"/>
+              <path d="M394 592H514" stroke="#26323D" stroke-width="18" stroke-linecap="round"/>
+              <ellipse cx="330" cy="560" rx="205" ry="210" fill="none" stroke="#26323D" stroke-width="22"/>
+              <ellipse cx="330" cy="560" rx="193" ry="198" fill="none" stroke="#3A4A5B" stroke-width="1.5"/>
+              <ellipse cx="330" cy="560" rx="154" ry="159" fill="none" stroke="#202A33" stroke-width="1.2"/>
+              <ellipse cx="330" cy="592" rx="64" ry="40" fill="#1B222A" stroke="#3A4A5B" stroke-width="2"/>
+              <ellipse cx="330" cy="592" rx="34" ry="20" fill="none" stroke="#3A4A5B"/>
+
+              <!-- HUD 位 -->
+              <path d="M402 262Q470 250 552 258L544 278Q470 270 410 280Z" fill="#06090C" stroke="#35414E" stroke-width="1.5"/>
+              <ellipse cx="482" cy="268" rx="82" ry="28" fill="#35C6E0" opacity=".16" filter="url(#pgBlur)"/>
+              <g transform="rotate(-3 482 268)">
+                <rect x="420" y="256" width="124" height="26" rx="9" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
+                <rect x="426" y="261" width="112" height="16" rx="6" fill="#0A0E13"/>
+                <path d="M436 269H488" stroke="#35C6E0" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+              </g>
+              <path d="M432 254L396 132" stroke="#35C6E0" stroke-width="1.4" stroke-dasharray="7 10" opacity=".45" fill="none"/>
+              <path d="M532 252L566 132" stroke="#35C6E0" stroke-width="1.4" stroke-dasharray="7 10" opacity=".45" fill="none"/>
+              <ellipse cx="480" cy="152" rx="96" ry="46" fill="url(#pgGlow)"/>
+              <text x="480" y="170" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="60" font-weight="600" fill="#9AECF8" text-anchor="middle" opacity=".9">42</text>
+              <text x="480" y="192" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="14" fill="#35C6E0" text-anchor="middle" opacity=".55">KM/H</text>
+
+              <!-- 车机屏幕 -->
+              <rect x="646" y="266" width="306" height="172" rx="18" fill="#070A0D" stroke="#4A5A6B" stroke-width="2"/>
+              <rect x="658" y="278" width="282" height="148" rx="11" fill="#0B0F14" stroke="#1E2A35"/>
+              <path d="M700 388A58 58 0 1 1 816 388" fill="none" stroke="#26323E" stroke-width="7" stroke-linecap="round"/>
+              <path d="M700 388A58 58 0 0 1 742 340" fill="none" stroke="#35C6E0" stroke-width="7" stroke-linecap="round" opacity=".55"/>
+              <rect x="848" y="300" width="56" height="7" rx="3.5" fill="#26323E"/>
+              <rect x="848" y="316" width="38" height="7" rx="3.5" fill="#1E2A35"/>
+              <rect x="848" y="360" width="60" height="24" rx="8" fill="#10161D" stroke="#1E2A35"/>
+              <rect x="848" y="396" width="60" height="10" rx="5" fill="#16233A"/>
+              <circle cx="890" cy="308" r="8" fill="none" stroke="#26323E"/>
+
+              <!-- 01 方向盘左侧支架 -->
+              <path d="M102 400V418" stroke="#3A4A5B" stroke-width="6" stroke-linecap="round"/>
+              <g>
+                <rect x="66" y="418" width="88" height="26" rx="9" fill="#0B0F14" stroke="#3A4A5B" stroke-width="1.5"/>
+                <path d="M78 426H142M78 433H142M78 440H142" stroke="#26323E" stroke-width="3" stroke-linecap="round"/>
+              </g>
+              <rect x="58" y="260" width="96" height="152" rx="22" fill="#4C8DFF" opacity=".14" filter="url(#pgBlur)" transform="rotate(-7 106 336)"/>
+              <g transform="rotate(-7 106 336)">
+                <rect x="68" y="270" width="76" height="132" rx="14" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
+                <rect x="74" y="277" width="64" height="118" rx="10" fill="#0A0E13"/>
+                <rect x="84" y="302" width="24" height="4" rx="2" fill="#26323E"/>
+                <rect x="84" y="312" width="14" height="4" rx="2" fill="#1E2A35"/>
+                <path d="M84 356A22 22 0 0 1 128 356" fill="none" stroke="#35C6E0" stroke-width="3.2" stroke-linecap="round" opacity=".85"/>
+                <circle cx="106" cy="392" r="2.5" fill="#4C8DFF"/>
+              </g>
+
+              <!-- 02 方向盘后传统仪表位（一般是横屏） -->
+              <rect x="238" y="296" width="172" height="106" rx="20" fill="#4C8DFF" opacity=".14" filter="url(#pgBlur)" transform="rotate(-2 324 349)"/>
+              <g transform="rotate(-2 324 349)">
+                <rect x="248" y="306" width="152" height="86" rx="13" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
+                <rect x="254" y="312" width="140" height="74" rx="8" fill="#0A0E13"/>
+                <path d="M268 376A17 17 0 0 1 302 376" fill="none" stroke="#35C6E0" stroke-width="3.2" stroke-linecap="round" opacity=".85"/>
+                <rect x="314" y="324" width="36" height="4" rx="2" fill="#26323E"/>
+                <rect x="314" y="334" width="24" height="4" rx="2" fill="#1E2A35"/>
+                <rect x="314" y="352" width="58" height="9" rx="4.5" fill="#16233A"/>
+                <circle cx="384" cy="376" r="2.5" fill="#4C8DFF"/>
+              </g>
+
+              <!-- 04 车机屏左上角夹装 -->
+              <rect x="618" y="230" width="82" height="134" rx="21" fill="#4C8DFF" opacity=".16" filter="url(#pgBlur)" transform="rotate(-8 657 296)"/>
+              <g transform="rotate(-8 657 296)">
+                <rect x="628" y="240" width="62" height="114" rx="12" fill="#0E1319" stroke="#4C8DFF" stroke-width="2.5"/>
+                <rect x="634" y="247" width="50" height="100" rx="8" fill="#0A0E13"/>
+                <rect x="642" y="262" width="24" height="4" rx="2" fill="#26323E"/>
+                <rect x="642" y="272" width="14" height="4" rx="2" fill="#1E2A35"/>
+                <path d="M642 316A16 16 0 0 1 674 316" fill="none" stroke="#35C6E0" stroke-width="3" stroke-linecap="round" opacity=".85"/>
+                <circle cx="659" cy="340" r="2.5" fill="#4C8DFF"/>
+              </g>
+              <path d="M646 246H610V296" fill="none" stroke="#4C8DFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>
+              <rect x="604" y="246" width="11" height="26" rx="4" fill="#1B222A" stroke="#4C8DFF" stroke-width="2"/>
+
+              <!-- 位置编号 -->
+              <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="19" text-anchor="middle" fill="#9CC2FF">
+                <path d="M62 236L88 266" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
+                <circle cx="88" cy="268" r="3" fill="#4C8DFF"/>
+                <circle class="pin" cx="52" cy="218" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
+                <text class="pint" x="52" y="218" dy=".35em">01</text>
+
+                <path d="M240 252L250 294" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
+                <circle cx="252" cy="300" r="3" fill="#4C8DFF"/>
+                <circle class="pin" cx="232" cy="235" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
+                <text class="pint" x="232" y="235" dy=".35em">02</text>
+
+                <path d="M588 212L554 254" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
+                <circle cx="552" cy="258" r="3" fill="#4C8DFF"/>
+                <circle class="pin" cx="602" cy="194" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
+                <text class="pint" x="602" y="194" dy=".35em">03</text>
+
+                <path d="M728 212L690 234" stroke="#3A4A5B" stroke-width="1.5" stroke-dasharray="5 7" fill="none"/>
+                <circle cx="686" cy="236" r="3" fill="#4C8DFF"/>
+                <circle class="pin" cx="740" cy="194" r="20" fill="#0B0F14" stroke="#4C8DFF" stroke-width="2"/>
+                <text class="pint" x="740" y="194" dy=".35em">04</text>
+              </g>
+            </svg>
           </div>
+          <div class="place-cap"><span><b>驾驶位视角</b> · 非实车比例</span></div>
+        </div>
+
+        <div class="place-legend reveal" style="transition-delay:.08s">
+          <div class="place-item">
+            <span class="n">01</span>
+            <div>
+              <b>方向盘左侧 · 手机支架<i class="rec">强烈推荐</i></b>
+              <p>尤其是固定于车门把手、空调出风口的手机支架：驾驶员左右都可以看到车速，更安全。可横可竖；注意别挡左前视野、转向灯拨杆和 A 柱。</p>
+            </div>
+          </div>
+          <div class="place-item">
+            <span class="n">02</span>
+            <div>
+              <b>方向盘后 · 传统仪表位</b>
+              <p>一般是横屏。手机立在原车仪表前，读数正对视线。先确认不遮挡原车仪表、转向柱与拨杆，手机也不能碰到方向盘。</p>
+            </div>
+          </div>
+          <div class="place-item">
+            <span class="n">03</span>
+            <div>
+              <b>HUD 位 · 附加 HUD</b>
+              <p>手机平放在仪表台 HUD 凹槽，靠前风挡反射读数。夜间更清楚，白天亮度有限；别加贴膜挡视线。</p>
+            </div>
+          </div>
+          <div class="place-item">
+            <span class="n">04</span>
+            <div>
+              <b>车机屏左上角 · 夹装</b>
+              <p>夹在车机屏幕左上角，导航与 T-Dash 同屏。注意别挡住车机触控、出风口和屏幕散热。</p>
+            </div>
+          </div>
+          <p class="place-note">仅为摆放示意，不构成安装建议：任何摆法都不得遮挡视线、方向盘、安全气囊或车机触控；行驶中不要调整手机；以车辆说明书和当地法规为准。</p>
         </div>
       </div>
     </section>
@@ -2102,7 +2598,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <div class="latency-grid">
         <div class="latency-copy reveal">
           <span class="eyebrow">Why it feels instant</span>
-          <h2>行驶中，只问车一件事。</h2>
+          <h2>极致低延迟：<span class="h2-keep">行驶中，只问车一件事。</span></h2>
           <p>一块仪表只有一件要紧事：读数别滞后。行驶全程只发一条高频请求——<b>vehicle_data(DRIVE)</b>；车速、功率、里程、档位都装在同一条响应里，一次拿全。下一轮按上一轮的实测往返 +60 ms 排，<b>最快 250 ms</b> 一刷。</p>
           <p>充电、空调、车外温度这些驻车数据，行驶中<b>一条都不发</b>；轨迹用手机自己的 GPS，不占蓝牙带宽。所有读数同一时刻只允许一条在飞，慢读排队也拖不住车速。</p>
           <p>锁车、开闭件这类命令走 <b>VCSEC</b>——整车睡着时也能直接应答，不会为了看一眼状态把车叫醒。</p>
@@ -2146,12 +2642,14 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <div class="security reveal">
         <div>
           <span class="eyebrow">Security</span>
-          <h2>私钥只在这台手机上。</h2>
-          <p>首次启动时随机生成一把 P-256 钥匙。私钥用 AndroidKeyStore 的 AES-256-GCM 封装后存放，配对时只把公钥交给车；日志里只出现指纹末四位。</p>
+          <h2>绝对安全：<span class="h2-keep">T-Dash 没有服务器。</span></h2>
+          <p>T-Dash 是纯蓝牙应用：没有账号、没有遥测、没有云端，也不运营后端、API 端点或云同步。手机与车辆之间只有 BLE 直连——不存在集中存放车主数据的数据库，也没有可供开发者查询数据的管理后台。</p>
+          <p style="margin-top:12px">首次启动时随机生成一把 P-256 钥匙。私钥用 AndroidKeyStore 的 AES-256-GCM 封装后存放，配对时只把公钥交给车；日志里只出现指纹末四位。</p>
           <ul class="sec-list">
-            <li><span class="n">01</span><span><b>每台设备独立生成</b>，不预置、不复用，换机不会带走旧钥匙。</span></li>
-            <li><span class="n">02</span><span><b>解封失败绝不静默换钥匙</b>，要你在设置里显式确认才重新生成。</span></li>
-            <li><span class="n">03</span><span><b>车辆链路纯 BLE</b>；联网只发生在统计页地图瓦片和可选的高德天气（默认关），没有遥测上传。</span></li>
+            <li><span class="n">01</span><span><b>无服务器，无后台</b>：开发者没有你的数据，也没有可以远程查询数据的入口。</span></li>
+            <li><span class="n">02</span><span><b>每台设备独立生成</b>，不预置、不复用，换机不会带走旧钥匙。</span></li>
+            <li><span class="n">03</span><span><b>解封失败绝不静默换钥匙</b>，要你在设置里显式确认才重新生成。</span></li>
+            <li><span class="n">04</span><span><b>车辆链路纯 BLE</b>；联网只发生在统计页地图瓦片、定位解析和可选的高德天气（默认关），由手机直发高德/OSM，不经过 T-Dash，也没有遥测上传。</span></li>
           </ul>
         </div>
         <div class="sec-visual" aria-label="密钥封装流程动效示意">
@@ -2183,14 +2681,14 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
         <div><b>0<em>元/月</em></b><span>没有订阅与内购</span></div>
         <div><b>0<em>个</em></b><span>要登录的账号</span></div>
         <div><b>0<em>台</em></b><span>经手数据的服务器</span></div>
-        <div><b>2<em>处</em></b><span>联网点：地图瓦片 + 可选天气</span></div>
+        <div><b>3<em>处</em></b><span>联网点：底图 + 定位解析 + 天气</span></div>
       </div>
       <p class="note reveal"><b>成本清单：</b>一台支持蓝牙的安卓手机，其余全免。钥匙是你自己的 NFC 卡，公钥只存在你手机里；项目与 Tesla 无隶属，也不接入任何官方账号体系。</p>
       <div class="cta reveal">
-        <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.1/T-Dash-0.0.1.apk" target="_blank" rel="noopener noreferrer">下载 APK · 0.0.1 <span aria-hidden="true">↓</span></a>
+        <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.2/T-Dash-0.0.2.apk" target="_blank" rel="noopener noreferrer">下载 APK · 0.0.2 <span aria-hidden="true">↓</span></a>
         <a class="btn btn-ghost" href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">GitHub 仓库</a>
       </div>
-      <p class="note reveal"><b>Release：</b><a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.1" target="_blank" rel="noopener noreferrer">github.com/yaoxinxia/T-Dash/releases/tag/v0.0.1</a><br>APK 53 MB · Android 10 及以上 · 需允许安装未知来源应用；本版为正式签名，与旧 debug 版不能覆盖，需先卸载。</p>
+      <p class="note reveal"><b>Release：</b><a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.2" target="_blank" rel="noopener noreferrer">github.com/yaoxinxia/T-Dash/releases/tag/v0.0.2</a><br>APK 53 MB · Android 10 及以上 · 需允许安装未知来源应用；正式签名，可从 v0.0.1 覆盖升级；与更早的 debug 版不能覆盖，需先卸载。</p>
     </section>
   </div>
 
@@ -2199,7 +2697,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
     <section id="start">
       <div class="sec-head reveal">
         <span class="eyebrow">First run</span>
-        <h2>三步，把钥匙交给手机。</h2>
+        <h2>三步，手机连上车机。</h2>
         <p>不需要 Tesla 开发者账号，也不需要填任何账号密码。</p>
       </div>
       <div class="steps">
@@ -2223,6 +2721,25 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
     </section>
   </div>
 
+  <!-- ============ 说明 ============ -->
+  <div class="wrap">
+    <section id="notes" class="notes" aria-label="说明">
+      <div class="notes-head reveal">
+        <span class="eyebrow">Notes</span>
+        <h2>说明</h2>
+      </div>
+      <div class="notes-grid">
+        <p class="reveal"><b>开发</b>本软件使用 Qoder 辅助开发。</p>
+        <p class="reveal"><b>协议</b>车辆通信基于 Tesla 开放的 vehicle-command 协议定义；手机与车直连，不经过第三方服务。</p>
+        <p class="reveal"><b>地图能力</b>定位解析与天气来自高德地图开放平台，需自行前往高德开放平台申请个人 API（Web 服务 Key）。Key 只存本机，请求由手机直接发往高德，请自行保管；个人 Key 存在被限流或封禁的可能。统计页底图走高德公开栅格瓦片（非开放平台接口），仅限个人非商业使用；如高德调整授权会更换底图源。</p>
+        <p class="reveal"><b>无服务器</b>T-Dash 没有服务器：没有账号、遥测和云同步，也没有可供开发者查询数据的后台。开发者和任何服务器都拿不到你的私钥与本机数据。</p>
+        <p class="reveal"><b>联网与数据</b>私钥、轨迹、取证照片和个人信息只存本机。联网只发生在统计页底图、定位解析和天气；由手机直发高德或 OpenStreetMap（未配置 Key 时定位解析退回 OSM），不经过 T-Dash，发出的只有瓦片编号、坐标或城市编码，不含 VIN、车速或轨迹文件。</p>
+        <p class="reveal"><b>使用风险</b>本软件按「原样」免费提供，不提供任何担保。驾驶中请勿操作手机；车辆控制结果以车辆本身为准，使用风险由使用者自行承担。</p>
+        <p class="reveal"><b>测试范围</b>本软件由个人开发者开发与维护。受成本限制，只在个人所有的 Tesla Model 3 焕新版和 vivo X100 上做过实车测试；在其他车型或机型上遇到问题，欢迎提 Issue，也可以自行修改源码修复。</p>
+      </div>
+    </section>
+  </div>
+
 </main>
 
 <footer>
@@ -2232,7 +2749,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
         <span class="mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="#3E6AE1"/><g transform="translate(12 12.6) scale(0.3) translate(-54 -55)"><path fill="#FFFFFF" d="M54,30 L78,42 L54,54 L30,42 Z"/><path fill="#FFFFFF" d="M38,50 L54,58 L70,50 L70,60 L54,68 L38,60 Z"/><path fill="#FFFFFF" d="M42,66 L54,72 L66,66 L66,74 L54,80 L42,74 Z"/></g></svg>
         </span>
-        T-Dash <small>v0.0.1</small>
+        T-Dash <small>v0.0.2</small>
       </div>
       <p style="margin-top:12px">T-Dash 是纯蓝牙的 Tesla 安卓伴侣。协议层来自 teslamotors/vehicle-command 的公开定义，本项目与其无隶属关系，也与 Tesla, Inc. 无关。仅供个人车辆管理与学习使用。</p>
     </div>
@@ -2241,7 +2758,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <b>地图</b> 高德瓦片 · 另可选高德天气<br>
       <b>平台</b> Android · Kotlin / Compose<br>
       <b>GitHub</b> <a href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">yaoxinxia/T-Dash</a><br>
-      <b>Release</b> <a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.1" target="_blank" rel="noopener noreferrer">v0.0.1 · APK</a>
+      <b>Release</b> <a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.2" target="_blank" rel="noopener noreferrer">v0.0.2 · APK</a>
     </div>
   </div>
 </footer>
@@ -2656,7 +3173,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
     } else {
       stageDesc.textContent = parked
         ? '挂 P 后的版面：54sp 时钟 + 电量 / 车外 / 空调三张卡；速度环缩到右下角 40%×58%，功率表和六格行程留在原位。'
-        : '大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 时速度环滑到右下角，420ms 过渡。';
+        : '大数字车速按 5 段配色，有没有超速瞟一眼就能发现；下面一条阈值轨，右侧是本次行程的形状与六项读数。挂 P 时速度环滑到右下角，420ms 过渡。';
       stageChips.innerHTML = (parked ? '时钟|三张状态卡|右下速度环|六格行程' : '状态栏|阈值轨|270° 功率弧|路径小图')
         .split('|').map(x => `<span>${x}</span>`).join('');
     }
@@ -2680,6 +3197,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   function setOrient(o) {
     orient = o;
     simStage.classList.toggle('land', o === 'landscape');
+    simStage.parentElement.classList.toggle('wide', o === 'landscape');
     $$('#orientSwitch button').forEach(b => b.classList.toggle('on', b.dataset.orient === o));
     // 横屏壳刚显示时补一帧：它一直在收 rAF 的数值，但首帧前可能是旧数据。
     if (o === 'landscape') drawCluster(simClLand, simSpeed, simPower);
@@ -2691,7 +3209,17 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   function fitLandscape() {
     if (!simStage.classList.contains('land')) return;
     const sim = simStage.parentElement;
-    const avail = Math.max(280, sim.clientWidth - (innerWidth > 1100 ? 270 : 0));
+    const nav = sim.querySelector('.sim-nav');
+    const copy = sim.querySelector('.sim-copy');
+    const gap = parseFloat(getComputedStyle(sim).columnGap) || 0;
+    let avail;
+    if (innerWidth > 1100) {
+      avail = sim.clientWidth - nav.offsetWidth - gap;
+      if (!sim.classList.contains('wide')) avail -= copy.offsetWidth + gap;
+    } else {
+      avail = sim.clientWidth;
+    }
+    avail = Math.max(280, avail);
     let s = Math.min(1, avail / 798);
     if (innerHeight <= 940) s = Math.min(s, .82);
     simStage.style.setProperty('--pls', s.toFixed(4));

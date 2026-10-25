@@ -491,8 +491,9 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
     }
 
     /**
-     * 驻车版面的天气（设置里默认关闭）。只在仪表页开着：缓存 12 小时内先显示，
-     * 30 分钟一刷；失败 10 分钟后再试。全程走网络，不占车机链路，也不发 BLE 请求。
+     * 仪表天气（设置里默认关闭）。驻车版面显示在时钟下方，行车版面显示右上角迷你「时间+天气」。
+     * 只在仪表页开着：缓存 12 小时内先显示，30 分钟一刷；失败 10 分钟后再试。
+     * 行车中照常取数：全程走手机网络，不发 BLE、不占车机链路，与"行驶中只问车一件事"不冲突。
      */
     val weather = MutableStateFlow<com.teslalink.app.weather.WeatherNow?>(null)
     private var weatherJob: Job? = null

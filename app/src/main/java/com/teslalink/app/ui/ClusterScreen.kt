@@ -248,6 +248,16 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
                     }
                 }
 
+                // 行车版面右上角：迷你时间+天气（驻车版面的时钟/天气让位给车速后，这里保住一眼可读）。
+                // 天气没开/没配 Key/失败时只显示时间，不放占位符。横幅都居中、接续浮层在左上，右上角是空位。
+                DriveMiniClock(
+                    weather,
+                    visible = !parked,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 12.dp, end = if (landscape) 18.dp else 14.dp),
+                )
+
                 // 断开时不显示：那条连接提示已经占了这一行，而且断开后 updatedAtMs 清零、
                 // stale 恒为真，两个提示会叠在同一位置。
                 if (stale && !notConnected) {
@@ -679,6 +689,61 @@ private fun ClusterRing(
                 .fillMaxHeight(fh),
             connecting, retry, accelText, bands,
         )
+    }
+}
+
+/**
+ * 行车版面右上角的迷你「时间 + 天气」。驻车大时钟让位给车速后，这里保住"现在几点、
+ * 外面什么天气"的一眼可读；天气没开、没配 Key 或失败时只显示时间（宁缺不占位）。
+ * 与驻车版面共用同一个 weather StateFlow——取数在行车中照常进行：走手机网络，
+ * 不发任何 BLE 请求，也不占车机链路，与"行驶中只问车一件事"不冲突。
+ * visible=false 整块撤出组合，alpha 与驻车版面切换同步。
+ */
+@Composable
+private fun DriveMiniClock(
+    weather: com.teslalink.app.weather.WeatherNow?,
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        label = "driveMini",
+    )
+    if (alpha <= 0.01f) return
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(visible) {
+        if (!visible) return@LaunchedEffect
+        while (true) {
+            nowMs = System.currentTimeMillis()
+            delay(5_000)
+        }
+    }
+    val cal = Calendar.getInstance().apply { timeInMillis = nowMs }
+    Column(
+        modifier.alpha(alpha),
+        horizontalAlignment = Alignment.End,
+    ) {
+        Text(
+            "%02d:%02d".format(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE)),
+            style = TextStyle(
+                fontSize = 16.sp,
+                fontWeight = FontWeight.W700,
+                letterSpacing = 0.6.sp,
+                fontFeatureSettings = "tnum",
+                color = TL.textHi,
+            ),
+        )
+        weather?.let { w ->
+            Text(
+                "${w.text} ${w.tempC}°",
+                fontSize = 10.5.sp,
+                letterSpacing = 0.4.sp,
+                color = TL.textLow,
+                maxLines = 1,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
     }
 }
 
