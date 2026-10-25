@@ -1,5 +1,8 @@
 # T-Dash — Free, Open-Source Tesla Dashboard App (Unofficial · BLE-only)
 
+> **Live demo: [tdash-jb9s5m4ncnw.qoder.website](https://tdash-jb9s5m4ncnw.qoder.website)**
+> Features, mounting positions, latency, security and the roadmap — all on one page.
+
 > English | [简体中文](README-CN.md)
 
 T-Dash is a **free, open-source Tesla dashboard app** for Android (unofficial), built on a

@@ -1,5 +1,8 @@
 # T-Dash — 开源免费的 Tesla 仪表盘 App（非官方 · BLE-only）
 
+> **在线演示：[tdash-jb9s5m4ncnw.qoder.website](https://tdash-jb9s5m4ncnw.qoder.website)**
+> 功能、摆放、延迟、安全与未来计划，一页看完。
+
 > [English](README-EN.md) | 简体中文
 
 T-Dash 是一款**开源免费**的 Tesla 仪表盘 App（非官方），**纯蓝牙直连**：仪表、控制、统计与
