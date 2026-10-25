@@ -830,6 +830,24 @@ section{padding:96px 0}
 .note a,.foot .meta a{color:var(--mid);border-bottom:1px solid var(--hairline);transition:color .2s,border-color .2s}
 .note a:hover,.foot .meta a:hover{color:var(--hi);border-bottom-color:var(--mid)}
 
+/* ============ 未来计划 ============ */
+#roadmap{padding-top:92px}
+.road-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:32px}
+.road-card{
+  border:1px dashed #33414F;border-radius:18px;padding:22px;position:relative;
+  background:rgba(20,25,32,.4);transition:border-color .25s,background .25s;
+}
+.road-card:hover{border-color:rgba(76,141,255,.6);background:rgba(20,25,32,.66)}
+.road-card .plan{
+  position:absolute;top:20px;right:20px;font-family:var(--mono);font-size:9px;letter-spacing:.1em;
+  color:var(--data);border:1px solid rgba(53,198,224,.3);background:rgba(53,198,224,.07);
+  border-radius:999px;padding:3px 9px;white-space:nowrap;
+}
+.road-card h3{font-size:15px;font-weight:600;padding-right:70px}
+.road-card .trig{margin-top:10px;font-family:var(--mono);font-size:10px;line-height:1.6;color:var(--low)}
+.road-card .body{margin-top:9px;font-size:11.5px;line-height:1.75;color:var(--mid)}
+.road-card .body b{color:var(--hi);font-weight:600}
+
 /* ============ 说明 ============ */
 .notes{padding:0 0 78px}
 .notes-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:22px}
@@ -883,6 +901,10 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
 @media (max-height:940px){
   .sim-stage{--ps:.82}
 }
+@media (max-width:760px){
+  /* 头部三块（品牌+定位语 / 7 项导航 / 角标）到 742px 就放不下，先让位给角标 */
+  .nav-ver{display:none}
+}
 @media (max-width:640px){
   .wrap{padding:0 18px}
   section{padding:68px 0}
@@ -906,6 +928,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   .security{padding:22px;border-radius:20px}
   .notes{padding-bottom:56px}
   .notes-grid{grid-template-columns:1fr;gap:16px}
+  .road-grid{grid-template-columns:1fr}
   .foot .meta{text-align:left}
   .hero-pwrap{justify-content:center}
 }
@@ -944,6 +967,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <a href="#security">安全</a>
       <a href="#free">开源免费</a>
       <a href="#start">使用</a>
+      <a href="#roadmap">计划</a>
     </nav>
     <span class="nav-ver">ANDROID · BLE ONLY</span>
   </div>
@@ -2762,6 +2786,44 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
         </div>
       </div>
       <p class="note reveal"><b>适用边界：</b>控制与仪表依赖蓝牙，远程能力不在这一版里。车机屏幕本身不受第三方 App 控制；这里的仪表是手机侧的数字仪表。本页按当前版本的实际排版重绘，视频帧与地图为示意底图。</p>
+    </section>
+  </div>
+
+  <!-- ============ 未来计划 ============ -->
+  <div class="wrap">
+    <section id="roadmap">
+      <div class="sec-head reveal">
+        <span class="eyebrow">Roadmap · 计划中</span>
+        <h2>更多玩法：<span class="h2-keep">场景化智能座舱。</span></h2>
+        <p>现在这一版要你亲手选页面、摆手机、按按钮。下一步想让它认得你正在做什么：什么时候在通勤、什么时候在等人、什么时候只是把车停在营地过夜。场景一旦定下来，仪表版面、亮度、要提醒的东西跟着换，不用再手动翻。</p>
+      </div>
+      <div class="road-grid">
+        <article class="road-card reveal">
+          <span class="plan">计划中</span>
+          <h3>通勤场景</h3>
+          <p class="trig">识别：工作日时段 + 常走路线</p>
+          <p class="body">挂 D 起步就切到通勤版面，<b>限速差和本次电耗放到最大</b>；行程自动接续、到家自动收尾归档，省掉每次翻页和「这段算到哪了」。</p>
+        </article>
+        <article class="road-card reveal" style="transition-delay:.06s">
+          <span class="plan">计划中</span>
+          <h3>等人 / 接娃场景</h3>
+          <p class="trig">识别：P 档 + 固定地点停留超过设定时长</p>
+          <p class="body">换成大字等待版面：时间、电量、车内外温度一目了然。同时<b>把控制项收进二级</b>，人在车上乱按也不会误开空调和车窗。</p>
+        </article>
+        <article class="road-card reveal" style="transition-delay:.12s">
+          <span class="plan">计划中</span>
+          <h3>驻车过夜 / 露营场景</h3>
+          <p class="trig">识别：长时间驻车 + 电量接近设定阈值</p>
+          <p class="body">仪表切到<b>低功耗常驻版面</b>：只留时钟、电量和温度，亮度跟着压暗，电量接近阈值先提醒，不等到最后一格才弹窗。</p>
+        </article>
+        <article class="road-card reveal" style="transition-delay:.18s">
+          <span class="plan">计划中</span>
+          <h3>洗车 / 代客场景</h3>
+          <p class="trig">识别：手动一键进入，退出要本机确认</p>
+          <p class="body">临时收起对外可见的内容：<b>取证照片、个人信息、行程记录先藏起来</b>，只留必要控制项，场景退出后原样恢复。</p>
+        </article>
+      </div>
+      <p class="note reveal"><b>口径：</b>这一节写的是开发计划，不是当前版本已有的功能，也不承诺上线时间；已经做出来的部分以本页其余章节和仓库源码为准。想让你那个场景先做，去 GitHub 开一个 Issue 说清用法。</p>
     </section>
   </div>
 
