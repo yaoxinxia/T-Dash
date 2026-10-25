@@ -1,10 +1,10 @@
-# T-Dash — Unofficial Tesla Android Companion (BLE-only)
+# T-Dash — Free, Open-Source Tesla Dashboard App (Unofficial · BLE-only)
 
 > English | [简体中文](README-CN.md)
 
-T-Dash is a **pure-Bluetooth** Tesla companion app for Android: a digital cluster, vehicle
-controls, trip stats and a full suite of driving tools, all talking to the car directly over
-BLE. **T-Dash has no server** — no developer account, no owner login, no subscription, and no
+T-Dash is a **free, open-source Tesla dashboard app** for Android (unofficial), built on a
+**pure-Bluetooth** link: a digital cluster, vehicle controls, trip stats and a full suite of
+driving tools, all talking to the car directly over BLE. **T-Dash has no server** — no developer account, no owner login, no subscription, and no
 telemetry. The command layer is a from-scratch Kotlin implementation of the Vehicle Security /
 Infotainment protocols defined by Tesla's official open-source library
 [teslamotors/vehicle-command](https://github.com/teslamotors/vehicle-command); the `.proto`

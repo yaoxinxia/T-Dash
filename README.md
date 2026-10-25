@@ -1,7 +1,10 @@
-# T-Dash — Unofficial Tesla Android Companion (BLE-only)
+# T-Dash — 开源免费的 Tesla 仪表盘 App
 
-A **pure-Bluetooth** Tesla companion app for Android: digital cluster, vehicle controls, trip
-stats and driving tools, straight to the car over BLE. **No server, no account, no
+*Free, open-source Tesla dashboard app for Android — unofficial, BLE-only.*
+
+一款**纯蓝牙直连**的安卓 Tesla 仪表盘 App：仪表、控制、统计与行车工具全部直接和车通信。
+A **pure-Bluetooth** dashboard app for Android: cluster, controls, stats and driving tools talk
+straight to the car over BLE. **No server, no account, no
 subscription, no telemetry.** Command layer is a from-scratch Kotlin implementation of
 Tesla's open [vehicle-command](https://github.com/teslamotors/vehicle-command) protocols.
 

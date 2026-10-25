@@ -1,9 +1,9 @@
-# T-Dash — 非官方 Tesla 安卓伴侣（BLE-only）
+# T-Dash — 开源免费的 Tesla 仪表盘 App（非官方 · BLE-only）
 
 > [English](README-EN.md) | 简体中文
 
-T-Dash 是一个**纯蓝牙直连**的 Tesla 安卓应用：仪表、控制、统计与一整套行车工具全部通过
-BLE 与车辆直接通信。**T-Dash 没有服务器**：没有开发者账号、没有车主账号登录、没有订阅，
+T-Dash 是一款**开源免费**的 Tesla 仪表盘 App（非官方），**纯蓝牙直连**：仪表、控制、统计与
+一整套行车工具全部通过 BLE 与车辆直接通信。**T-Dash 没有服务器**：没有开发者账号、没有车主账号登录、没有订阅，
 也没有遥测。命令层基于 Tesla 官方开源库
 [teslamotors/vehicle-command](https://github.com/teslamotors/vehicle-command)
 定义的 Vehicle Security / Infotainment 协议，用 Kotlin 从零实现；`.proto` 定义取自官方仓库。
