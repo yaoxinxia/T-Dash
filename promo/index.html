@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>T-Dash · 手机，就是你的仪表盘</title>
-<meta name="description" content="T-Dash：纯蓝牙直连 Tesla 的安卓伴侣。控制、状态、轨迹、仪表全部在本机完成，没有账号，没有云。">
+<title>T-Dash · 不用加装一块屏，仪表盘就在手里</title>
+<meta name="description" content="T-Dash 是非官方、非盈利的 Tesla 安卓伴侣：仪表、控制、行程、事故取证、行车记录一个 App 全都有。行驶中只发一条车辆数据请求，车速 250 ms 起一刷，纯蓝牙直连，钥匙不出手机、数据不进服务器，Apache-2.0 开源免费。">
 <style>
 /* ============ tokens（与 app 的 TL 主题同源） ============ */
 :root{
@@ -245,83 +245,98 @@ button.pill{font-family:inherit;cursor:pointer;align-self:flex-start}
   background:radial-gradient(120% 92% at 50% 0%,#0B1016 0%,rgba(6,9,13,.65) 56%,#020304 100%);
   overflow:hidden;
 }
-.cl-top{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
-.cl-halo{position:absolute;width:calc(var(--su)*2.15);height:calc(var(--su)*2.15);border-radius:50%;background:radial-gradient(closest-side,var(--glow),transparent 72%)}
+/* 驻车时字号按真实 unit 公式缩到 40%（Compose：unit=min(槽宽*.42,(槽高-30)/1.95)），
+   但档位胶囊内外边距、轨道 3dp 粗细在 Compose 里都是固定 dp，不跟着缩——所以不能整体缩放。 */
+.cl[data-mode="parked"]{--su:52.8px}
+.cl-stage{position:relative;flex:1;min-height:0}
+/* 速度环槽位：行车铺满居中；驻车按真实版面缩到右下 40%×58%（420ms，与 Compose 同一条曲线） */
+.cl-speed{
+  position:absolute;left:0;top:0;width:100%;height:100%;
+  display:flex;align-items:center;justify-content:center;
+  transition:left .42s cubic-bezier(.4,0,.2,1),top .42s cubic-bezier(.4,0,.2,1),
+             width .42s cubic-bezier(.4,0,.2,1),height .42s cubic-bezier(.4,0,.2,1);
+}
+.cl[data-mode="parked"] .cl-speed{left:60%;top:42%;width:40%;height:58%}
+.cl-stack{display:flex;flex-direction:column;align-items:center}
+.cl-halo{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:calc(var(--su)*2.15);height:calc(var(--su)*2.15);border-radius:50%;
+  background:radial-gradient(closest-side,var(--glow),transparent 72%);
+  transition:width .42s cubic-bezier(.4,0,.2,1),height .42s cubic-bezier(.4,0,.2,1);
+}
+.cl[data-mode="parked"] .cl-halo{width:calc(var(--su)*.85);height:calc(var(--su)*.85)}
 .cl-num{
-  position:relative;z-index:1;font-size:var(--su);font-weight:800;line-height:.9;letter-spacing:-3px;
+  position:relative;z-index:1;font-size:var(--su);font-weight:800;line-height:1.06;letter-spacing:-3px;
   background:linear-gradient(180deg,#F4F8FF 0%,var(--band) 58%,var(--band) 100%);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
   filter:drop-shadow(0 0 24px var(--glow));font-variant-numeric:tabular-nums;
+  transition:font-size .42s cubic-bezier(.4,0,.2,1);
 }
-.cl-unit{font-size:calc(var(--su)*.18);font-weight:600;letter-spacing:.18em;color:var(--low);margin-top:3px;position:relative;z-index:1}
-.rail{display:flex;gap:3px;height:3px;width:calc(var(--su)*1.02);margin-top:12px;position:relative;z-index:1}
+.cl-unit{font-size:calc(var(--su)*.18);font-weight:600;letter-spacing:.18em;color:var(--low);margin-top:3px;position:relative;z-index:1;transition:font-size .42s cubic-bezier(.4,0,.2,1)}
+.rail{display:flex;gap:3px;height:3px;width:calc(var(--su)*1.02);margin-top:calc(var(--su)*.07);position:relative;z-index:1;transition:width .42s cubic-bezier(.4,0,.2,1),margin-top .42s cubic-bezier(.4,0,.2,1)}
 .rail i{display:block;height:100%;border-radius:2px;background:#232C36;transition:background .3s,opacity .3s,box-shadow .3s}
-.shift{display:flex;align-items:center;gap:9px;margin-top:13px;position:relative;z-index:1}
-.shift span{font-size:calc(var(--su)*.22);font-weight:700;line-height:1;color:var(--low);opacity:.4;transition:opacity .25s,transform .25s,color .25s}
-.shift span[data-g="P"].on{color:var(--good)}
-.shift span[data-g="R"].on{color:var(--c3)}
-.shift span[data-g="N"].on{color:var(--warn)}
-.shift span[data-g="D"].on{color:var(--c0)}
-.shift span.on{opacity:1;transform:scale(1.12)}
-.cl-bottom{display:flex;align-items:center;gap:7px;height:188px;flex:none}
+.shift{
+  display:flex;align-items:center;gap:4px;margin-top:calc(var(--su)*.08);position:relative;z-index:1;
+  padding:4px 10px;border-radius:999px;background:rgba(27,34,42,.55);border:1px solid var(--hairline-soft);
+  transition:margin-top .42s cubic-bezier(.4,0,.2,1);
+}
+.shift span{
+  display:inline-flex;align-items:center;justify-content:center;padding:1px 8px;border-radius:999px;
+  font-size:calc(var(--su)*.22);font-weight:400;line-height:1;color:var(--low);opacity:.6;
+  transition:font-size .42s cubic-bezier(.4,0,.2,1),opacity .25s,transform .25s,color .25s,background .25s;
+}
+.shift span[data-g="P"].on{color:#4CAF50;background:rgba(76,175,80,.16)}
+.shift span[data-g="R"].on{color:#FF9800;background:rgba(255,152,0,.16)}
+.shift span[data-g="N"].on{color:#FFEB3B;background:rgba(255,235,60,.16)}
+.shift span[data-g="D"].on{color:#38BDF8;background:rgba(56,189,248,.16)}
+.shift span.on{opacity:1;transform:scale(1.15);font-weight:700}
+.cl-bottom{display:flex;align-items:center;gap:7px;flex:none}
 .cl-power{flex:.78;min-width:0}
-.cl-trip{flex:1.22;min-width:0;height:100%}
+.cl-power .gwrap{width:92%;margin:0 auto}
+.cl-trip{flex:1.22;min-width:0}
 .gwrap{width:100%;aspect-ratio:1;position:relative}
 .gwrap svg{width:100%;height:100%;overflow:visible}
 .gtext{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
-.gtext b{font-size:calc(var(--su)*.215);font-weight:650;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.gtext b{font-size:28.4px;font-weight:650;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
 .gtext span{font-size:8px;letter-spacing:.14em;color:var(--low)}
 .gtext em{font-style:normal;font-size:8px;letter-spacing:.18em;color:var(--low);margin-top:1px}
 .cl-trip{
   background:rgba(27,34,42,.72);border:1px solid var(--hairline-soft);border-radius:12px;
-  padding:7px 8px;display:flex;flex-direction:column;gap:4px;
+  padding:8px 10px;display:flex;flex-direction:row;align-items:center;gap:10px;
 }
-.trip-h{display:flex;align-items:center;justify-content:space-between;font-size:8.5px;letter-spacing:.12em;color:var(--low);text-transform:uppercase}
-.trip-h .live{color:var(--data);letter-spacing:.04em;display:inline-flex;align-items:center;gap:3px}
-.trip-h .live::before{content:"";width:4px;height:4px;border-radius:50%;background:var(--data);box-shadow:0 0 6px var(--data);animation:breathe 1.6s infinite}
-.route{flex:1;min-height:48px;position:relative}
+.route{flex:none;width:56px;height:56px;position:relative}
 .route svg{position:absolute;inset:0;width:100%;height:100%}
-.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:2px 7px}
-.tg span{display:block;font-size:7px;letter-spacing:.08em;color:var(--low);text-transform:uppercase;line-height:1.2}
-.tg b{display:block;font-size:11px;font-weight:600;line-height:1.35;white-space:nowrap}
-.tg b em{font-style:normal;font-size:7px;color:var(--low);margin-left:1px;font-weight:500}
+.tgrid{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:3px 6px}
+.tg > span{display:block;font-size:8.5px;font-weight:600;letter-spacing:0;color:var(--low);line-height:11px}
+.tg b{display:block;font-size:11.5px;font-weight:600;line-height:15px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.cl-spacer{flex:.22;min-height:0}
 .cl-tells{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;flex:none}
 .tc{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:999px;border:1px solid var(--hairline-soft);background:rgba(20,25,32,.6);font-size:8.3px;color:var(--mid);letter-spacing:.02em}
 .tc i{width:4px;height:4px;border-radius:50%;background:var(--good);box-shadow:0 0 6px var(--good)}
 .tc.cyan i{background:var(--data);box-shadow:0 0 6px var(--data)}
 .tc.dim{opacity:.55}
-/* 驻车版面 */
-.cl[data-mode="drive"] .park-only{display:none}
-.cl[data-mode="parked"] .drive-only{display:none}
-.cl-park{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:0 4px 0 8px}
-.cl-clockwrap{width:56%;text-align:center}
-.cl-clock{font-size:54px;font-weight:800;letter-spacing:-1.5px;line-height:1;color:var(--hi);font-feature-settings:"tnum"}
-.cl-date{font-size:11.5px;color:var(--mid);letter-spacing:.05em;margin-top:4px}
-.pk-cards{width:56%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+/* 驻车版面：时钟 + 三卡压在左上，速度环同步滑进右下，功率与行程卡原地不动 */
+.cl-park{
+  position:absolute;left:0;top:50%;transform:translateY(-50%);width:56%;
+  display:flex;flex-direction:column;align-items:center;
+  opacity:0;pointer-events:none;transition:opacity .38s cubic-bezier(.4,0,.2,1);
+}
+.cl[data-mode="parked"] .cl-park{opacity:1}
+.cl-clockwrap{width:100%;text-align:center}
+.cl-clock{
+  font-size:54px;font-weight:800;letter-spacing:-1.5px;line-height:1;font-feature-settings:"tnum";
+  background:linear-gradient(180deg,var(--hi),rgba(232,238,245,.72));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+.cl-date{font-size:13px;color:var(--mid);letter-spacing:1px;margin-top:2px}
+.pk-cards{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
 .pk{
   background:rgba(27,34,42,.72);border:1px solid var(--hairline-soft);border-radius:12px;
   padding:6px;display:flex;flex-direction:column;align-items:center;gap:1px;text-align:center;
 }
-.pk span{font-size:9px;color:var(--low);line-height:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pk small{font-size:8.5px;color:var(--low);line-height:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk span{font-size:9px;font-weight:600;color:var(--low);line-height:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk small{font-size:8.5px;font-weight:600;color:var(--low);line-height:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pk b{font-size:18px;font-weight:700;line-height:23px;letter-spacing:0;font-feature-settings:"tnum";white-space:nowrap}
-.cl-ring{position:absolute;right:0;bottom:0;width:40%;aspect-ratio:1}
-.cl-ring svg{width:100%;height:100%}
-.cl-ring .rtext{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
-.cl-ring .rtext b{font-size:calc(var(--su)*.44);font-weight:700;line-height:1;color:var(--hi)}
-.cl-ring .rtext span{font-size:7.5px;letter-spacing:.16em;color:var(--low)}
-/* 接续 */
-.resume-pill{
-  position:absolute;left:9px;right:9px;top:46px;z-index:8;display:flex;align-items:center;justify-content:space-between;
-  border-radius:999px;background:rgba(59,196,107,.16);border:1px solid rgba(59,196,107,.5);
-  color:#56D685;font-size:9.5px;letter-spacing:.02em;overflow:hidden;
-  opacity:0;transform:translateY(-5px);pointer-events:none;transition:opacity .3s,transform .3s;
-  backdrop-filter:blur(8px);
-}
-.resume-pill.show{opacity:1;transform:none;pointer-events:auto}
-.resume-pill.ack{background:rgba(59,196,107,.24)}
-.resume-pill button{background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:7px 8px;white-space:nowrap}
-.resume-pill .x{opacity:.65;padding-right:10px;font-size:9px}
 
 /* ============ 控制页 ============ */
 .tile-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -601,6 +616,78 @@ section{padding:96px 0}
 .sim-chips span{font-size:9px;color:var(--low);border:1px solid var(--hairline-soft);border-radius:999px;padding:3px 7px}
 .sim-hint{margin-top:9px;font-size:10px;line-height:1.55;color:var(--low)}
 .sim-hint b{color:var(--mid);font-weight:550}
+.stage-controls{display:flex;align-items:center;gap:6px}
+.orient-switch{display:flex;gap:2px;padding:2px;border:1px solid var(--hairline);border-radius:999px;background:var(--surface)}
+.orient-switch[hidden]{display:none}
+.orient-switch button{
+  height:22px;padding:0 8px;border-radius:999px;border:0;background:none;color:var(--low);
+  font-family:inherit;font-size:10px;font-weight:700;cursor:pointer;transition:background .2s,color .2s;
+}
+.orient-switch button.on{background:var(--accent-soft);color:var(--accent)}
+
+/* ============ 横屏（车机横放，仪表页专用） ============ */
+/* 真实 Compose：横屏没有底栏，左侧换成 60dp 竖排 SideRail；仪表页是三联栏
+   （功率左 / 速度+档位居中 / 本次行程右），驻车时左栏换成时钟+竖排三卡、功率淡出、
+   速度环缩到中栏右下角 46%×62%，三栏宽度 0.80:1.20:0.84 ↔ 1.02:0.94:0.90 同步 420ms。 */
+.sim-stage.land{--pls:1;width:calc(798px * var(--pls))}
+.sim-stage.land .pwrap{--ps:var(--pls);width:100%;height:calc(384px * var(--ps))}
+.sim-stage.land .phone{width:798px;height:384px}
+.sim-stage.land .phone::before,.sim-stage.land .phone::after{display:none}
+.sim-stage.land .screen{width:780px;height:366px}
+.sim-stage.land .tabbar,.sim-stage.land .gesturebar{display:none}
+.sim-stage.land .stage-bar{width:min(calc(798px * var(--pls)),100%)}
+.sim-stage.land .page{left:60px}
+.siderail{display:none}
+.sim-stage.land .siderail{
+  display:flex;flex-direction:column;position:absolute;left:0;top:28px;bottom:0;width:60px;z-index:7;
+  background:var(--base);border-right:1px solid var(--hairline);
+}
+.siderail button{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  border:0;background:none;padding:0;color:var(--low);font-family:inherit;font-size:10px;
+  letter-spacing:.6px;font-weight:400;cursor:pointer;
+}
+.siderail button::before{content:"";width:16px;height:2px;border-radius:2px;background:transparent}
+.siderail button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--low)}
+.siderail button.on{color:var(--hi)}
+.siderail button.on::before{background:var(--accent)}
+.siderail button.on svg{color:var(--accent)}
+
+.cl.land{display:none;padding:0;--su:112px}
+.cl.land[data-mode="parked"]{--su:48px}
+.sim-stage.land .cl:not(.land){display:none}
+.sim-stage.land .cl.land{display:flex}
+.cl3{flex:1;display:flex;align-items:center;padding:0 14px;min-height:0}
+.cl-left,.cl-center,.cl-right{
+  position:relative;align-self:stretch;min-width:0;
+  transition:flex-grow .42s cubic-bezier(.4,0,.2,1);
+}
+.cl-left{flex:0.80 1 0}
+.cl-center{flex:1.20 1 0}
+.cl-right{flex:0.84 1 0}
+.cl.land[data-mode="parked"] .cl-left{flex-grow:1.02}
+.cl.land[data-mode="parked"] .cl-center{flex-grow:0.94}
+.cl.land[data-mode="parked"] .cl-right{flex-grow:0.90}
+.cl.land .cl-power{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  transition:opacity .42s cubic-bezier(.4,0,.2,1);
+}
+.cl.land .cl-power .gwrap{width:100%}
+.cl.land[data-mode="parked"] .cl-power{opacity:0}
+.cl.land .cl-park{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:92%;z-index:2;
+}
+.cl.land .cl-clock{font-size:38px}
+.cl.land .cl-date{font-size:11.5px}
+.cl.land .pk-cards{grid-template-columns:1fr;gap:7px;margin-top:12px}
+.cl.land .cl-speed{position:absolute;inset:0}
+.cl.land[data-mode="parked"] .cl-speed{left:54%;top:38%;width:46%;height:62%}
+.cl.land[data-mode="parked"] .cl-halo{width:calc(var(--su)*.72);height:calc(var(--su)*.72)}
+.cl.land .cl-right{display:flex;align-items:center}
+.cl.land .cl-trip{flex:1;min-width:0;flex-direction:column;align-items:center;gap:4px}
+.cl.land .cl-trip .route{width:100%;height:76px}
+.cl.land .tgrid{width:100%;grid-template-columns:repeat(3,minmax(0,1fr))}
+.cl.land .cl-tells{margin:0 12px 8px}
 
 /* ============ 安全 ============ */
 .security{
@@ -663,6 +750,8 @@ section{padding:96px 0}
   border-left:2px solid var(--hairline);padding-left:14px;
 }
 .note b{color:var(--mid);font-weight:500}
+.note a,.foot .meta a{color:var(--mid);border-bottom:1px solid var(--hairline);transition:color .2s,border-color .2s}
+.note a:hover,.foot .meta a:hover{color:var(--hi);border-bottom-color:var(--mid)}
 
 /* ============ footer ============ */
 footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
@@ -742,7 +831,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <span class="mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="#3E6AE1"/><g transform="translate(12 12.6) scale(0.3) translate(-54 -55)"><path fill="#FFFFFF" d="M54,30 L78,42 L54,54 L30,42 Z"/><path fill="#FFFFFF" d="M38,50 L54,58 L70,50 L70,60 L54,68 L38,60 Z"/><path fill="#FFFFFF" d="M42,66 L54,72 L66,66 L66,74 L54,80 L42,74 Z"/></g></svg>
       </span>
-      T-Dash <small>v0.3.0</small>
+      T-Dash <small>v0.0.1</small>
     </div>
     <nav class="nav-links" aria-label="页面导航">
       <a href="#screens">功能</a>
@@ -760,58 +849,52 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   <div class="wrap">
     <section class="hero" aria-label="介绍">
       <div class="hero-copy">
-        <span class="eyebrow">Tesla companion · 纯蓝牙直连</span>
-        <h1>手机，就是<br><span class="grad">你的仪表盘。</span></h1>
-        <p class="lead">
-          T-Dash 用蓝牙直接和车对话。控制、状态、轨迹、仪表全部在<b>本机</b>完成——
-          没有车主账号，没有订阅，没有遥测服务器。
-        </p>
+        <span class="eyebrow">Tesla companion · 非官方 · 非盈利 · 纯蓝牙直连</span>
+        <h1>不用加装一块屏，<br><span class="grad">仪表盘就在手里。</span></h1>
+        <p class="lead">仪表、控制、行程、事故取证、行车记录，<b>一个 App 全都有</b>。行驶中只发<b>一条</b>车辆数据请求，车速 <b>250 ms</b> 起一刷，指令 <b>50–300 ms</b> 往返；蓝牙直连，钥匙不出手机，数据不进服务器。<b>开源、免费、协议开放</b>。</p>
         <div class="chips">
-          <span class="chip"><i></i>命令往返 50–300 ms</span>
-          <span class="chip blue"><i></i>车速快车道 250 ms</span>
-          <span class="chip cyan"><i></i>车辆数据不出手机</span>
+          <span class="chip"><i></i>九块屏 · 一个 App</span>
+          <span class="chip blue"><i></i>无需账号 · 没有订阅</span>
+          <span class="chip cyan"><i></i>Apache-2.0 开源</span>
         </div>
         <div class="cta">
-          <a class="btn btn-primary" href="#screens">逐屏看实机界面 <span aria-hidden="true">↓</span></a>
-          <a class="btn btn-ghost" href="#security">密钥怎么保管</a>
+          <a class="btn btn-primary" href="#screens">看看它能做什么 <span aria-hidden="true">→</span></a>
+          <a class="btn btn-ghost" href="#start">三步连上车</a>
         </div>
-        <p class="hero-note">手机里的界面按 v0.3.0 的 Compose 排版重绘：同一套色板、同一套间距、同一套文案。车速与功率为演示动效。</p>
+        <p class="hero-note">手机在演示一段完整行程：P → D → 加速 → 减速 → P，六项读数同步推进；界面按当前 Compose 排版重绘。</p>
       </div>
 
       <div class="pwrap hero-pwrap">
-        <div class="phone" aria-label="T-Dash 仪表页，行车版面">
+        <div class="phone" aria-label="T-Dash 仪表页演示">
           <div class="screen">
             <div class="sysbar"><span data-clock>14:32</span><i class="punch"></i><span class="right"><span>5G</span><b>82%</b></span></div>
             <div class="app-area">
               <div class="page cluster active">
-                <div class="cl" id="heroCl" data-mode="drive" style="--su:132px;--band:#FFB300;--glow:rgba(255,179,0,.16)">
-                  <div class="cl-top drive-only">
-                    <div class="cl-halo"></div>
-                    <div class="cl-num" data-speed>92</div>
-                    <div class="cl-unit">KM/H</div>
-                    <div class="rail" data-rail><i></i><i></i><i></i><i></i><i></i></div>
-                    <div class="shift" data-shift><span data-g="P">P</span><span data-g="R">R</span><span data-g="N">N</span><span data-g="D" class="on">D</span></div>
-                  </div>
-
-                  <div class="cl-park park-only">
-                    <div class="cl-clockwrap">
-                      <div class="cl-clock" data-clock>14:32</div>
-                      <div class="cl-date" data-date>10月24日 周六</div>
+                <div class="cl" id="heroCl" data-mode="parked" style="--band:#38BDF8;--glow:rgba(56,189,248,.16)">
+                  <div class="cl-stage">
+                    <div class="cl-speed">
+                      <div class="cl-stack">
+                        <div class="cl-halo"></div>
+                        <div class="cl-num" data-speed>0</div>
+                        <div class="cl-unit">KM/H</div>
+                        <div class="rail" data-rail><i></i><i></i><i></i><i></i><i></i></div>
+                        <div class="shift" data-shift><span data-g="P" class="on">P</span><span data-g="R">R</span><span data-g="N">N</span><span data-g="D">D</span></div>
+                      </div>
                     </div>
-                    <div class="cl-ring">
-                      <svg viewBox="0 0 120 120" aria-hidden="true">
-                        <circle cx="60" cy="60" r="48" fill="none" stroke="#232C36" stroke-width="3"/>
-                      </svg>
-                      <div class="rtext"><b>0</b><span>KM/H</span></div>
-                    </div>
-                    <div class="pk-cards">
-                      <div class="pk"><span>电量%</span><b>82</b><small>&nbsp;</small></div>
-                      <div class="pk"><span>车外°C</span><b>18</b><small>&nbsp;</small></div>
-                      <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
+                    <div class="cl-park">
+                      <div class="cl-clockwrap">
+                        <div class="cl-clock" data-clock>14:32</div>
+                        <div class="cl-date" data-date>10月24日 周六</div>
+                      </div>
+                      <div class="pk-cards">
+                        <div class="pk"><span>电量%</span><b>82</b><small>&nbsp;</small></div>
+                        <div class="pk"><span>车外°C</span><b>18</b><small>&nbsp;</small></div>
+                        <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
+                      </div>
                     </div>
                   </div>
 
-                  <div class="cl-bottom drive-only">
+                  <div class="cl-bottom">
                     <div class="cl-power">
                       <div class="gwrap">
                         <svg viewBox="0 0 130 130" aria-hidden="true">
@@ -824,39 +907,34 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                           <circle class="arc-dot-halo" cx="46.25" cy="20.82" r="4.4" fill="#080A0D"/>
                           <circle class="arc-dot" cx="46.25" cy="20.82" r="2.7" fill="#E8EEF5"/>
                         </svg>
-                        <div class="gtext"><b data-power>57</b><span>KW</span><em>功率</em></div>
+                        <div class="gtext"><b data-power>0</b><span>KW</span><em>功率</em></div>
                       </div>
                     </div>
                     <div class="cl-trip">
-                      <div class="trip-h"><span>本次</span><span class="live">进行中</span></div>
                       <div class="route">
-                        <svg viewBox="0 0 120 58" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-                          <path d="M8 46 C 22 44, 26 30, 40 32 S 58 44, 72 34 S 96 18, 112 22" fill="none" stroke="#4C8DFF" stroke-width="5" stroke-linecap="round" opacity=".18"/>
-                          <path d="M8 46 C 22 44, 26 30, 40 32 S 58 44, 72 34 S 96 18, 112 22" fill="none" stroke="#4C8DFF" stroke-width="2" stroke-linecap="round"/>
-                          <circle cx="8" cy="46" r="2" fill="#9BAABA" opacity=".85"/>
-                          <circle cx="112" cy="22" r="2.7" fill="#4C8DFF"/>
+                        <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                          <path d="M18 96 C 32 94, 34 72, 50 70 S 66 88, 80 74 S 96 42, 106 40" fill="none" stroke="#4C8DFF" stroke-width="10" stroke-linecap="round" opacity=".18" stroke-dasharray="999" stroke-dashoffset="999"/>
+                          <path d="M18 96 C 32 94, 34 72, 50 70 S 66 88, 80 74 S 96 42, 106 40" fill="none" stroke="#4C8DFF" stroke-width="5" stroke-linecap="round" stroke-dasharray="999" stroke-dashoffset="999"/>
+                          <circle cx="18" cy="96" r="5" fill="#9BAABA" opacity=".85"/>
+                          <circle cx="18" cy="96" r="7" fill="#4C8DFF"/>
                         </svg>
                       </div>
                       <div class="tgrid">
-                        <div class="tg"><span>本次</span><b>12.4<em>km</em></b></div>
-                        <div class="tg"><span>用时</span><b>18:42</b></div>
-                        <div class="tg"><span>均速</span><b>40<em>km/h</em></b></div>
-                        <div class="tg"><span>朝向</span><b>东北</b></div>
-                        <div class="tg"><span>最高</span><b>118<em>km/h</em></b></div>
-                        <div class="tg"><span>总里程</span><b>3862<em>km</em></b></div>
+                        <div class="tg"><span>本次km</span><b><span data-trip-dist>0.0</span></b></div>
+                        <div class="tg"><span>用时</span><b data-trip-time>00:00</b></div>
+                        <div class="tg"><span>均速km/h</span><b><span data-trip-avg>0</span></b></div>
+                        <div class="tg"><span>朝向</span><b data-trip-heading>--</b></div>
+                        <div class="tg"><span>最高km/h</span><b><span data-trip-max>0</span></b></div>
+                        <div class="tg"><span>总里程km</span><b><span data-trip-odo>3862</span></b></div>
                       </div>
                     </div>
                   </div>
+                  <div class="cl-spacer" aria-hidden="true"></div>
 
                   <div class="cl-tells">
                     <span class="tc"><i></i>🔒 落锁</span>
                     <span class="tc cyan"><i></i>❄ 空调</span>
                     <span class="tc"><i></i>车机在线</span>
-                  </div>
-
-                  <div class="resume-pill" id="resumePill">
-                    <button type="button" id="resumeMain">⟳ 接续上一段 · 14:32 结束</button>
-                    <button type="button" class="x" id="resumeX" aria-label="收起提示">✕</button>
                   </div>
                 </div>
               </div>
@@ -886,16 +964,16 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   <div class="wrap">
     <section id="screens">
       <div class="sec-head reveal">
-        <span class="eyebrow">Redrawn from the real layouts</span>
-        <h2>九块屏幕，和手机上长得一样。</h2>
-        <p>不是示意卡片。下面每一屏都按 v0.3.0 的 Compose 排版重建：TL 色板、折叠分区、状态胶囊、58dp 动作块、2×2 机位、270° 功率弧。点左侧切换页面，点 P / D 看仪表换版面。</p>
+        <span class="eyebrow">Core features</span>
+        <h2>它不只是仪表盘。</h2>
+        <p>仪表把车速、功率、档位和本次行程压进一屏；控制页管门锁、空调、座椅和充电，能点的按钮都跟着车辆真实状态亮灭；统计页把车速 / 功率曲线和本机 GPS 轨迹留在一处；工具页收着快捷启动、事故取证、行车记录仪、零百计时和车机皮肤。九块屏各管一件事，点开就是那一件。</p>
       </div>
 
       <div class="sim">
         <nav class="sim-nav reveal" aria-label="界面目录">
           <div class="sim-group">
             <span>日常</span>
-            <button type="button" class="sim-link on" data-view="cluster" data-tool="" data-kicker="01 · 仪表" data-title="仪表 · 行车版面" data-desc="大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 自动换成时钟、三张状态卡和右下角速度环。" data-chips="状态栏|阈值轨|270° 功率弧|路径小图">仪表 <small>行车 / 驻车</small></button>
+            <button type="button" class="sim-link on" data-view="cluster" data-tool="" data-kicker="01 · 仪表" data-title="仪表 · 行车版面" data-desc="大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 后速度环缩到右下角，时钟与三张状态卡补位，功率和行程卡留在原位。" data-chips="状态栏|阈值轨|270° 功率弧|路径小图">仪表 <small>行车 / 驻车 / 横屏</small></button>
             <button type="button" class="sim-link" data-view="control" data-tool="" data-kicker="02 · 控制" data-title="控制 · 状态先行" data-desc="顶部一排是车辆真实状态，下面是折叠分区。已经落锁时「落锁」置灰，后备箱关着时「关后备箱」置灰——按钮跟着状态走，不跟着旧读数走。" data-chips="9 枚状态胶囊|6 个折叠分区|实测延迟">控制 <small>车锁 / 空调 / 充电</small></button>
             <button type="button" class="sim-link" data-view="stats" data-tool="" data-kicker="03 · 统计" data-title="统计 · 本次启动全量保留" data-desc="车速与功率曲线可以分别展开，下面是行程条和 GPS 轨迹。地图只是垫底，轨迹颜色来自速度分档；原始采样点一个不删。" data-chips="车速曲线|行程切换|300dp 地图">统计 <small>曲线 / 轨迹</small></button>
           </div>
@@ -919,9 +997,15 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
               <div class="stage-kicker" id="stageKicker">01 · 仪表</div>
               <div class="stage-name" id="stageName">仪表 · 行车版面</div>
             </div>
-            <div class="pd-switch" role="group" aria-label="档位，切换驻车与行车版面">
-              <button type="button" data-mode-btn="parked">P</button>
-              <button type="button" class="on" data-mode-btn="drive">D</button>
+            <div class="stage-controls">
+              <div class="orient-switch" id="orientSwitch" role="group" aria-label="屏幕方向，切换竖屏与横屏">
+                <button type="button" data-orient="portrait" class="on">竖屏</button>
+                <button type="button" data-orient="landscape">横屏</button>
+              </div>
+              <div class="pd-switch" role="group" aria-label="档位，切换驻车与行车版面">
+                <button type="button" data-mode-btn="parked">P</button>
+                <button type="button" class="on" data-mode-btn="drive">D</button>
+              </div>
             </div>
           </div>
 
@@ -931,34 +1015,31 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                 <div class="sysbar"><span data-clock>14:32</span><i class="punch"></i><span class="right"><span>5G</span><b>82%</b></span></div>
                 <div class="app-area" id="simApp">
                   <div class="page cluster active" data-page="cluster" aria-label="仪表">
-                    <div class="cl" id="simCl" data-mode="drive" style="--su:132px;--band:#FFB300;--glow:rgba(255,179,0,.16)">
-                      <div class="cl-top drive-only">
-                        <div class="cl-halo"></div>
-                        <div class="cl-num" data-speed>92</div>
-                        <div class="cl-unit">KM/H</div>
-                        <div class="rail" data-rail><i></i><i></i><i></i><i></i><i></i></div>
-                        <div class="shift" data-shift><span data-g="P">P</span><span data-g="R">R</span><span data-g="N">N</span><span data-g="D" class="on">D</span></div>
-                      </div>
-
-                      <div class="cl-park park-only">
-                        <div class="cl-clockwrap">
-                          <div class="cl-clock" data-clock>14:32</div>
-                          <div class="cl-date" data-date>10月24日 周六</div>
+                    <div class="cl" id="simCl" data-mode="drive" style="--band:#FFB300;--glow:rgba(255,179,0,.16)">
+                      <div class="cl-stage">
+                        <div class="cl-speed">
+                          <div class="cl-stack">
+                            <div class="cl-halo"></div>
+                            <div class="cl-num" data-speed>92</div>
+                            <div class="cl-unit">KM/H</div>
+                            <div class="rail" data-rail><i></i><i></i><i></i><i></i><i></i></div>
+                            <div class="shift" data-shift><span data-g="P">P</span><span data-g="R">R</span><span data-g="N">N</span><span data-g="D" class="on">D</span></div>
+                          </div>
                         </div>
-                        <div class="cl-ring">
-                          <svg viewBox="0 0 120 120" aria-hidden="true">
-                            <circle cx="60" cy="60" r="48" fill="none" stroke="#232C36" stroke-width="3"/>
-                          </svg>
-                          <div class="rtext"><b>0</b><span>KM/H</span></div>
-                        </div>
-                        <div class="pk-cards">
-                          <div class="pk"><span>电量%</span><b>82</b><small>&nbsp;</small></div>
-                          <div class="pk"><span>车外°C</span><b>18</b><small>&nbsp;</small></div>
-                          <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
+                        <div class="cl-park">
+                          <div class="cl-clockwrap">
+                            <div class="cl-clock" data-clock>14:32</div>
+                            <div class="cl-date" data-date>10月24日 周六</div>
+                          </div>
+                          <div class="pk-cards">
+                            <div class="pk"><span>电量%</span><b>82</b><small>&nbsp;</small></div>
+                            <div class="pk"><span>车外°C</span><b>18</b><small>&nbsp;</small></div>
+                            <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
+                          </div>
                         </div>
                       </div>
 
-                      <div class="cl-bottom drive-only">
+                      <div class="cl-bottom">
                         <div class="cl-power">
                           <div class="gwrap">
                             <svg viewBox="0 0 130 130" aria-hidden="true">
@@ -975,26 +1056,96 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                           </div>
                         </div>
                         <div class="cl-trip">
-                          <div class="trip-h"><span>本次</span><span class="live">进行中</span></div>
                           <div class="route">
-                            <svg viewBox="0 0 120 58" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-                              <path d="M8 46 C 22 44, 26 30, 40 32 S 58 44, 72 34 S 96 18, 112 22" fill="none" stroke="#4C8DFF" stroke-width="5" stroke-linecap="round" opacity=".18"/>
-                              <path d="M8 46 C 22 44, 26 30, 40 32 S 58 44, 72 34 S 96 18, 112 22" fill="none" stroke="#4C8DFF" stroke-width="2" stroke-linecap="round"/>
-                              <circle cx="8" cy="46" r="2" fill="#9BAABA" opacity=".85"/>
-                              <circle cx="112" cy="22" r="2.7" fill="#4C8DFF"/>
+                            <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                              <path d="M18 96 C 32 94, 34 72, 50 70 S 66 88, 80 74 S 96 42, 106 40" fill="none" stroke="#4C8DFF" stroke-width="10" stroke-linecap="round" opacity=".18"/>
+                              <path d="M18 96 C 32 94, 34 72, 50 70 S 66 88, 80 74 S 96 42, 106 40" fill="none" stroke="#4C8DFF" stroke-width="5" stroke-linecap="round"/>
+                              <circle cx="18" cy="96" r="5" fill="#9BAABA" opacity=".85"/>
+                              <circle cx="106" cy="40" r="7" fill="#4C8DFF"/>
                             </svg>
                           </div>
                           <div class="tgrid">
-                            <div class="tg"><span>本次</span><b>12.4<em>km</em></b></div>
-                            <div class="tg"><span>用时</span><b>18:42</b></div>
-                            <div class="tg"><span>均速</span><b>40<em>km/h</em></b></div>
+                            <div class="tg"><span>本次km</span><b>12.4</b></div>
+                            <div class="tg"><span>用时</span><b>18分</b></div>
+                            <div class="tg"><span>均速km/h</span><b>40</b></div>
                             <div class="tg"><span>朝向</span><b>东北</b></div>
-                            <div class="tg"><span>最高</span><b>118<em>km/h</em></b></div>
-                            <div class="tg"><span>总里程</span><b>3862<em>km</em></b></div>
+                            <div class="tg"><span>最高km/h</span><b>118</b></div>
+                            <div class="tg"><span>总里程km</span><b>3862</b></div>
                           </div>
                         </div>
                       </div>
+                      <div class="cl-spacer" aria-hidden="true"></div>
 
+                      <div class="cl-tells">
+                        <span class="tc"><i></i>🔒 落锁</span>
+                        <span class="tc cyan"><i></i>❄ 空调</span>
+                        <span class="tc"><i></i>车机在线</span>
+                      </div>
+                    </div>
+
+                    <!-- 横屏（车机横放）：功率左 / 速度+档位居中 / 本次行程右；驻车时左栏换成时钟+三卡 -->
+                    <div class="cl land" id="simClLand" data-mode="drive" style="--band:#FFB300;--glow:rgba(255,179,0,.16)">
+                      <div class="cl3">
+                        <div class="cl-left">
+                          <div class="cl-power">
+                            <div class="gwrap">
+                              <svg viewBox="0 0 130 130" aria-hidden="true">
+                                <path d="M31.06 98.94 A48 48 0 1 1 98.94 98.94" fill="none" stroke="#232C36" stroke-width="5.6" stroke-linecap="round"/>
+                                <path class="arc-glow" d="M20.03 48.24 A48 48 0 0 1 46.25 20.82" fill="none" stroke="#E8EEF5" stroke-width="15" stroke-linecap="round" opacity=".12"/>
+                                <path class="arc-active" d="M20.03 48.24 A48 48 0 0 1 46.25 20.82" fill="none" stroke="#E8EEF5" stroke-width="5.6" stroke-linecap="round"/>
+                                <circle cx="31.06" cy="98.94" r="1.7" fill="#647382"/>
+                                <circle cx="20.03" cy="48.24" r="1.7" fill="#647382"/>
+                                <circle cx="98.94" cy="98.94" r="1.7" fill="#647382"/>
+                                <circle class="arc-dot-halo" cx="46.25" cy="20.82" r="4.4" fill="#080A0D"/>
+                                <circle class="arc-dot" cx="46.25" cy="20.82" r="2.7" fill="#E8EEF5"/>
+                              </svg>
+                              <div class="gtext"><b data-power>57</b><span>KW</span><em>功率</em></div>
+                            </div>
+                          </div>
+                          <div class="cl-park">
+                            <div class="cl-clockwrap">
+                              <div class="cl-clock" data-clock>14:32</div>
+                              <div class="cl-date" data-date>10月24日 周六</div>
+                            </div>
+                            <div class="pk-cards">
+                              <div class="pk"><span>电量%</span><b>82</b><small>&nbsp;</small></div>
+                              <div class="pk"><span>车外°C</span><b>18</b><small>&nbsp;</small></div>
+                              <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="cl-center">
+                          <div class="cl-speed">
+                            <div class="cl-stack">
+                              <div class="cl-halo"></div>
+                              <div class="cl-num" data-speed>92</div>
+                              <div class="cl-unit">KM/H</div>
+                              <div class="rail" data-rail><i></i><i></i><i></i><i></i><i></i></div>
+                              <div class="shift" data-shift><span data-g="P">P</span><span data-g="R">R</span><span data-g="N">N</span><span data-g="D" class="on">D</span></div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="cl-right">
+                          <div class="cl-trip">
+                            <div class="route">
+                              <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                                <path d="M18 96 C 32 94, 34 72, 50 70 S 66 88, 80 74 S 96 42, 106 40" fill="none" stroke="#4C8DFF" stroke-width="10" stroke-linecap="round" opacity=".18"/>
+                                <path d="M18 96 C 32 94, 34 72, 50 70 S 66 88, 80 74 S 96 42, 106 40" fill="none" stroke="#4C8DFF" stroke-width="5" stroke-linecap="round"/>
+                                <circle cx="18" cy="96" r="5" fill="#9BAABA" opacity=".85"/>
+                                <circle cx="106" cy="40" r="7" fill="#4C8DFF"/>
+                              </svg>
+                            </div>
+                            <div class="tgrid">
+                              <div class="tg"><span>本次km</span><b>12.4</b></div>
+                              <div class="tg"><span>用时</span><b>18分</b></div>
+                              <div class="tg"><span>均速km/h</span><b>40</b></div>
+                              <div class="tg"><span>朝向</span><b>东北</b></div>
+                              <div class="tg"><span>最高km/h</span><b>118</b></div>
+                              <div class="tg"><span>总里程km</span><b>3862</b></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                       <div class="cl-tells">
                         <span class="tc"><i></i>🔒 落锁</span>
                         <span class="tc cyan"><i></i>❄ 空调</span>
@@ -1290,7 +1441,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                       </div>
                     </div>
 
-                    <div class="note-inline" id="statsNote">采样间隔：行驶 250 ms / 停车 600 ms（车速与档位），电量与温度 2.5 s。车辆数据全部来自蓝牙直连，仅地图底图走网络。</div>
+                    <div class="note-inline" id="statsNote">采样间隔：行驶 250–500 ms（按往返自适应）/ 停车 600 ms，只读 DRIVE（车速、功率、里程、档位）；电量与温度 2.5 s，仅驻车时读取。车辆数据全部来自蓝牙直连，仅地图底图走网络。</div>
                     <button type="button" class="pill on" id="clearChart">清空曲线</button>
                   </div>
 
@@ -1888,7 +2039,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
 
                     <div class="coll">
                       <button type="button" class="coll-h" aria-expanded="false">
-                        <div><b>关于与开发者</b><span>v0.3.0 · 开发者模式关</span></div>
+                        <div><b>关于与开发者</b><span>v0.0.1 · 开发者模式关</span></div>
                         <i>▸</i>
                       </button>
                       <div class="coll-b">
@@ -1898,7 +2049,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                         </div>
                         <div class="slabel">关于</div>
                         <div class="panel tight">
-                          <div class="kv"><span>版本</span><b>T-Dash v0.3.0</b></div>
+                          <div class="kv"><span>版本</span><b>T-Dash v0.0.1</b></div>
                           <div class="kv"><span>通道</span><b>蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）</b></div>
                           <div class="kv"><span>云端</span><b>无：无账号登录、无遥测服务器；网络权限仅用于轨迹页地图底图</b></div>
                           <div class="kv"><span>远程</span><b>人不在车旁时需要 Fleet API，当前版本未启用</b></div>
@@ -1907,6 +2058,13 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                     </div>
                   </div>
                 </div>
+                <nav class="siderail" id="simRail" aria-label="侧边导航">
+                  <button type="button" data-goto="control"><svg><use href="#i-ctrl"/></svg>控制</button>
+                  <button type="button" data-goto="tools"><svg><use href="#i-tools"/></svg>工具</button>
+                  <button type="button" class="on" data-goto="cluster"><svg><use href="#i-gauge"/></svg>仪表</button>
+                  <button type="button" data-goto="stats"><svg><use href="#i-chart"/></svg>统计</button>
+                  <button type="button" data-goto="settings"><svg><use href="#i-gear"/></svg>设置</button>
+                </nav>
                 <div class="tabbar" id="simTabs">
                   <button type="button" class="tab" data-goto="control"><svg><use href="#i-ctrl"/></svg>控制</button>
                   <button type="button" class="tab" data-goto="tools"><svg><use href="#i-tools"/></svg>工具</button>
@@ -1923,7 +2081,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
             <h3 id="stageTitle">仪表 · 行车版面</h3>
             <p id="stageDesc">大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 自动换成时钟、三张状态卡和右下角速度环。</p>
             <div class="sim-chips" id="stageChips"><span>状态栏</span><span>阈值轨</span><span>270° 功率弧</span><span>路径小图</span></div>
-            <div class="sim-hint" id="stageHint"><b>可以操作：</b>P / D 换版面；控制页解锁、开闭件会同步更新状态胶囊与最近命令；设置页能改速度分档，仪表立刻跟着变。</div>
+            <div class="sim-hint" id="stageHint"><b>可以操作：</b>P / D 换版面、右上角「竖屏 / 横屏」切成车机横放；控制页解锁、开闭件会同步更新状态胶囊与最近命令；设置页能改速度分档，仪表立刻跟着变。</div>
           </div>
         </div>
       </div>
@@ -1936,29 +2094,30 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <div class="latency-grid">
         <div class="latency-copy reveal">
           <span class="eyebrow">Why it feels instant</span>
-          <h2>少一跳，就快一截。</h2>
-          <p>命令不经过任何服务器。握手完成后，手机和车之间是一条加密的蓝牙通道；<b>会话缓存</b>让重启后的第一条命令省掉一次往返。</p>
-          <p>锁车、开闭件、门锁状态走 <b>VCSEC</b>——整车睡着时也能秒回，不会为了看一眼状态把车叫醒。</p>
+          <h2>行驶中，只问车一件事。</h2>
+          <p>一块仪表只有一件要紧事：读数别滞后。行驶全程只发一条高频请求——<b>vehicle_data(DRIVE)</b>；车速、功率、里程、档位都装在同一条响应里，一次拿全。下一轮按上一轮的实测往返 +60 ms 排，<b>最快 250 ms</b> 一刷。</p>
+          <p>充电、空调、车外温度这些驻车数据，行驶中<b>一条都不发</b>；轨迹用手机自己的 GPS，不占蓝牙带宽。所有读数同一时刻只允许一条在飞，慢读排队也拖不住车速。</p>
+          <p>锁车、开闭件这类命令走 <b>VCSEC</b>——整车睡着时也能直接应答，不会为了看一眼状态把车叫醒。</p>
           <div class="tiny-cards">
-            <div class="tiny"><b>会话缓存</b><span>epoch / counter 落盘，冷启动少一次握手</span></div>
-            <div class="tiny"><b>VCSEC 免唤醒</b><span>车身控制器直接应答锁车类请求</span></div>
-            <div class="tiny"><b>无网络栈</b><span>车辆链路零云端延迟、零计费</span></div>
+            <div class="tiny"><b>一条高频请求</b><span>DRIVE 单类，不拆成多次往返</span></div>
+            <div class="tiny"><b>250–500 ms 自适应</b><span>按上一轮往返 +60 ms 排下一轮</span></div>
+            <div class="tiny"><b>行驶中零慢请求</b><span>电量、温度只在驻车时读</span></div>
           </div>
         </div>
 
         <div class="paths reveal" style="transition-delay:.08s" aria-label="链路延迟示意">
           <div class="path-row">
-            <div class="path-label"><b>T-Dash</b>BLE 直连</div>
+            <div class="path-label"><b>T-Dash</b>车速数据 · BLE</div>
             <div class="track">
               <span class="line"></span>
               <span class="node a"><span></span><small>手机</small></span>
               <span class="node c"><span></span><small>车辆</small></span>
               <span class="packet blue"></span>
             </div>
-            <div class="path-badge">~50–300 ms</div>
+            <div class="path-badge">250–500 ms / 轮</div>
           </div>
           <div class="path-row">
-            <div class="path-label"><b>云端方案</b>示意</div>
+            <div class="path-label"><b>云端轮询</b>示意</div>
             <div class="track">
               <span class="line"></span>
               <span class="node a"><span></span><small>手机</small></span>
@@ -2018,6 +2177,11 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
         <div><b>1<em>处</em></b><span>联网点：仅统计页地图瓦片</span></div>
       </div>
       <p class="note reveal"><b>成本清单：</b>一台支持蓝牙的安卓手机，其余全免。钥匙是你自己的 NFC 卡，公钥只存在你手机里；项目与 Tesla 无隶属，也不接入任何官方账号体系。</p>
+      <div class="cta reveal">
+        <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.1/T-Dash-0.0.1.apk" target="_blank" rel="noopener noreferrer">下载 APK · 0.0.1 <span aria-hidden="true">↓</span></a>
+        <a class="btn btn-ghost" href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">GitHub 仓库</a>
+      </div>
+      <p class="note reveal"><b>Release：</b><a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.1" target="_blank" rel="noopener noreferrer">github.com/yaoxinxia/T-Dash/releases/tag/v0.0.1</a><br>APK 53 MB · Android 10 及以上 · 需允许安装未知来源应用；本版为正式签名，与旧 debug 版不能覆盖，需先卸载。</p>
     </section>
   </div>
 
@@ -2059,14 +2223,16 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
         <span class="mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="#3E6AE1"/><g transform="translate(12 12.6) scale(0.3) translate(-54 -55)"><path fill="#FFFFFF" d="M54,30 L78,42 L54,54 L30,42 Z"/><path fill="#FFFFFF" d="M38,50 L54,58 L70,50 L70,60 L54,68 L38,60 Z"/><path fill="#FFFFFF" d="M42,66 L54,72 L66,66 L66,74 L54,80 L42,74 Z"/></g></svg>
         </span>
-        T-Dash <small>v0.3.0</small>
+        T-Dash <small>v0.0.1</small>
       </div>
       <p style="margin-top:12px">T-Dash 是纯蓝牙的 Tesla 安卓伴侣。协议层来自 teslamotors/vehicle-command 的公开定义，本项目与其无隶属关系，也与 Tesla, Inc. 无关。仅供个人车辆管理与学习使用。</p>
     </div>
     <div class="meta">
       <b>车辆链路</b> BLE · 无云端<br>
       <b>地图</b> 高德瓦片 · 仅此一处联网<br>
-      <b>平台</b> Android · Kotlin / Compose
+      <b>平台</b> Android · Kotlin / Compose<br>
+      <b>GitHub</b> <a href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">yaoxinxia/T-Dash</a><br>
+      <b>Release</b> <a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.1" target="_blank" rel="noopener noreferrer">v0.0.1 · APK</a>
     </div>
   </div>
 </footer>
@@ -2195,7 +2361,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
     root.style.setProperty('--glow', rgba(color, .17));
 
     const num = root.querySelector('[data-speed]');
-    if (num) num.textContent = String(Math.round(speed));
+    if (num) num.textContent = String(Math.ceil(speed));
 
     const segs = root.querySelectorAll('[data-rail] i');
     const weights = [66, 22, 22, 22, 28];
@@ -2235,20 +2401,168 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
     if (halo) { halo.setAttribute('cx', dx.toFixed(2)); halo.setAttribute('cy', dy.toFixed(2)); }
   }
 
-  const driveRoots = $$('.cl');
+  const heroCl = $('#heroCl');
+  const driveRoots = $$('.cl').filter(root => root !== heroCl);
+
+  /* ---------- 首屏演示：P → D → 加速 → 减速 → P ---------- */
+  const HERO = { parkIn: 2.6, acc: 7.0, cruise: 2.4, dec: 6.2, stop: .9, parkOut: 3.2, vmax: 98 };
+  HERO.drive = HERO.acc + HERO.cruise + HERO.dec + HERO.stop;
+  HERO.cycle = HERO.parkIn + HERO.drive + HERO.parkOut;
+  const HERO_ODO = 3862.4;
+  const HERO_RAW_ACC = HERO.vmax * HERO.acc / 3600;
+  const HERO_RAW_DEC = HERO.vmax * HERO.dec / 3600;
+  const HERO_DIST_ACC = HERO_RAW_ACC * .5;
+  const HERO_DIST_CRUISE = HERO.vmax * HERO.cruise / 3600;
+  const HERO_DIST_DEC = HERO_RAW_DEC * .5;
+  const HERO_TRIP_KM = HERO_DIST_ACC + HERO_DIST_CRUISE + HERO_DIST_DEC;
+  const HERO_DIRS = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+  const smooth = u => u * u * (3 - 2 * u);
+  const heroDir = deg => HERO_DIRS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+  const heroClock = s => `${pad(Math.floor(s / 60))}:${pad(Math.floor(s % 60))}`;
+  const heroSet = (sel, text) => {
+    const el = heroCl.querySelector(sel);
+    if (el && el.textContent !== text) el.textContent = text;
+  };
+  const heroRoutePaths = $$('.route path', heroCl);
+  const heroRoute = heroRoutePaths[heroRoutePaths.length - 1] || null;
+  const heroDot = heroCl.querySelector('.route circle:last-of-type');
+  const heroRouteLen = heroRoute ? heroRoute.getTotalLength() : 0;
+  // 小图是"起点 → 当前位置"的已行驶轨迹，不是预知终点的路线：
+  // 用虚线偏移把整条路径按进度露出来，蓝点永远停在轨迹尖端。
+  heroRoutePaths.forEach(p => {
+    p.setAttribute('stroke-dasharray', heroRouteLen.toFixed(2));
+    p.setAttribute('stroke-dashoffset', heroRouteLen.toFixed(2));
+  });
+  function heroTrail(u) {
+    if (!heroRouteLen) return;
+    const p = clamp(u, 0, 1);
+    heroRoutePaths.forEach(path => path.setAttribute('stroke-dashoffset', (heroRouteLen * (1 - p)).toFixed(2)));
+    if (heroDot) {
+      const pt = heroRoute.getPointAtLength(heroRouteLen * p);
+      heroDot.setAttribute('cx', pt.x.toFixed(2));
+      heroDot.setAttribute('cy', pt.y.toFixed(2));
+    }
+  }
+
+  function heroTrip(d) {
+    if (d < HERO.acc) {
+      const u = d / HERO.acc;
+      return {
+        speed: HERO.vmax * smooth(u),
+        power: 24 + 150 * Math.pow(1 - u, .7) + 5 * Math.sin(d * 3.1),
+        dist: HERO_RAW_ACC * (u * u * u - u * u * u * u / 2),
+        max: HERO.vmax * smooth(u)
+      };
+    }
+    if (d < HERO.acc + HERO.cruise) {
+      const u = (d - HERO.acc) / HERO.cruise;
+      return {
+        speed: HERO.vmax,
+        power: 21 + 4 * Math.sin(d * 1.6),
+        dist: HERO_DIST_ACC + HERO_DIST_CRUISE * u,
+        max: HERO.vmax
+      };
+    }
+    if (d < HERO.acc + HERO.cruise + HERO.dec) {
+      const u = (d - HERO.acc - HERO.cruise) / HERO.dec;
+      return {
+        speed: HERO.vmax * (1 - smooth(u)),
+        power: -8 - 34 * (1 - u) + 3 * Math.sin(d * 2.4),
+        dist: HERO_DIST_ACC + HERO_DIST_CRUISE + HERO_RAW_DEC * (u - (u * u * u - u * u * u * u / 2)),
+        max: HERO.vmax
+      };
+    }
+    return { speed: 0, power: 0, dist: HERO_TRIP_KM, max: HERO.vmax };
+  }
+
+  function setShift(root, gear) {
+    root.querySelectorAll('[data-shift] span').forEach(s => s.classList.toggle('on', s.dataset.g === gear));
+  }
+
+  function heroMode(mode) {
+    if (heroCl.dataset.mode === mode) return;
+    heroCl.dataset.mode = mode;
+    setShift(heroCl, mode === 'parked' ? 'P' : 'D');
+    if (mode === 'parked') drawCluster(heroCl, 0, 0);
+  }
+
+  function heroDraw(now) {
+    const cycle = Math.floor(now / 1000 / HERO.cycle);
+    const ct = now / 1000 - cycle * HERO.cycle;
+    const driving = ct >= HERO.parkIn && ct < HERO.parkIn + HERO.drive;
+    heroMode(driving ? 'drive' : 'parked');
+    const d = clamp(ct - HERO.parkIn, 0, HERO.drive);
+    const trip = heroTrip(d);
+    // 出发前轨迹为空；行驶中按已走里程铺开；跑完后保留完整的一段（此刻终点才有意义）。
+    heroTrail(ct < HERO.parkIn ? 0 : trip.dist / HERO_TRIP_KM);
+    if (!driving) {
+      if (ct < HERO.parkIn) {
+        heroSet('[data-trip-dist]', '0.0');
+        heroSet('[data-trip-time]', '00:00');
+        heroSet('[data-trip-avg]', '0');
+        heroSet('[data-trip-heading]', '--');
+        heroSet('[data-trip-max]', '0');
+        heroSet('[data-trip-odo]', String(Math.round(HERO_ODO + cycle * HERO_TRIP_KM)));
+      }
+      return;
+    }
+
+    drawCluster(heroCl, trip.speed, trip.power);
+
+    const dist = trip.dist;
+    heroSet('[data-trip-dist]', dist.toFixed(1));
+    heroSet('[data-trip-time]', heroClock(d));
+    heroSet('[data-trip-avg]', String(Math.round(d > 1 ? dist / (d / 3600) : 0)));
+    heroSet('[data-trip-heading]', heroDir(52 + 4.8 * d));
+    heroSet('[data-trip-max]', String(Math.ceil(trip.max)));
+    heroSet('[data-trip-odo]', String(Math.round(HERO_ODO + cycle * HERO_TRIP_KM + dist)));
+  }
+
+  function heroStatic() {
+    heroMode('drive');
+    drawCluster(heroCl, 92, 57);
+    heroSet('[data-trip-dist]', '12.4');
+    heroSet('[data-trip-time]', '18分');
+    heroSet('[data-trip-avg]', '40');
+    heroSet('[data-trip-heading]', '东北');
+    heroSet('[data-trip-max]', '118');
+    heroSet('[data-trip-odo]', '3862');
+    heroTrail(1);
+  }
+
+  let simSpeed = 92, simPower = 57, simLast = 0;
   function frame(now) {
     const t = now / 1000;
-    driveRoots.forEach(root => {
-      if (root.dataset.mode === 'parked') return;
-      const speed = clamp(92 + 29 * Math.sin(t * .55) + 5 * Math.sin(t * 1.73), 0, 132);
-      const power = 48 + 53 * Math.sin(t * .55 + .85) + 10 * Math.sin(t * 1.9);
-      drawCluster(root, speed, power);
-    });
+    const dt = simLast ? Math.min(.06, (now - simLast) / 1000) : .016;
+    simLast = now;
+    heroDraw(now);
+    // 模拟器有两块仪表（竖屏壳与横屏壳）共用一份车速/功率：缓动只能算一次，
+    // 否则每块壳各推一次，两块显示的数字会越走越偏。
+    const parkedNow = simCl.dataset.mode === 'parked';
+    const targetSpeed = parkedNow ? 0
+      : clamp(92 + 29 * Math.sin(t * .55) + 5 * Math.sin(t * 1.73), 0, 132);
+    const targetPower = parkedNow ? 0
+      : 48 + 53 * Math.sin(t * .55 + .85) + 10 * Math.sin(t * 1.9);
+    const k = 1 - Math.exp(-dt * (parkedNow ? 8 : 2.6));
+    simSpeed += (targetSpeed - simSpeed) * k;
+    simPower += (targetPower - simPower) * k;
+    // 数字取 ceil：残留 0.03 也会显示成 1，驻车必须落回真正的 0。
+    if (parkedNow) {
+      if (Math.abs(simSpeed) < .5) simSpeed = 0;
+      if (Math.abs(simPower) < .5) simPower = 0;
+    }
+    const settled = parkedNow && simSpeed === 0 && simPower === 0;
+    if (!(settled && simCl.dataset.settled === '1')) {
+      simCl.dataset.settled = settled ? '1' : '';
+      driveRoots.forEach(root => drawCluster(root, simSpeed, simPower));
+    }
     requestAnimationFrame(frame);
   }
   if (!reduce) {
+    drawCluster(heroCl, 0, 0);
     requestAnimationFrame(frame);
   } else {
+    heroStatic();
     driveRoots.forEach(root => drawCluster(root, 92, 57));
   }
 
@@ -2260,8 +2574,13 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   const kicker = $('#stageKicker'), stageName = $('#stageName'), stageTitle = $('#stageTitle');
   const stageDesc = $('#stageDesc'), stageChips = $('#stageChips');
   const simCl = $('#simCl');
+  const simClLand = $('#simClLand');
+  const simStage = $('.sim-stage');
+  const orientSwitch = $('#orientSwitch');
+  const railTabs = $$('#simRail button');
   let view = 'cluster';
   let tool = 'quick';
+  let orient = 'portrait';
 
   function setToolUI(t) {
     tool = t;
@@ -2285,11 +2604,15 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   function setView(v, t) {
     if (v === 'tools') setToolUI(t || tool || 'quick');
     view = v;
+    // 横屏版面只做了仪表：切到别的页就回竖屏，避免把竖屏版面硬拉成宽屏。
+    if (v !== 'cluster' && orient === 'landscape') setOrient('portrait');
     pages.forEach(p => p.classList.toggle('active', p.dataset.page === v));
     tabs.forEach(b => b.classList.toggle('on', b.dataset.goto === v));
+    railTabs.forEach(b => b.classList.toggle('on', b.dataset.goto === v));
     const link = navFor(v, t || tool);
     navLinks.forEach(a => a.classList.toggle('on', a === link));
     applyCopy(link);
+    orientSwitch.hidden = v !== 'cluster';
     if (v === 'cluster') syncClusterCopy();
     if (v === 'stats') replayChart();
   }
@@ -2300,6 +2623,9 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
     const v = b.dataset.goto;
     setView(v, v === 'tools' ? tool : '');
   }));
+  railTabs.forEach(b => b.addEventListener('click', () => {
+    setView(b.dataset.goto, '');
+  }));
   stabs.forEach(b => b.addEventListener('click', () => {
     setView('tools', b.dataset.sub);
   }));
@@ -2308,22 +2634,61 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   function syncClusterCopy() {
     if (view !== 'cluster') return;
     const parked = simCl.dataset.mode === 'parked';
+    const land = orient === 'landscape';
     kicker.textContent = '01 · 仪表';
     stageName.textContent = parked ? '仪表 · 驻车版面' : '仪表 · 行车版面';
     stageTitle.textContent = stageName.textContent;
-    stageDesc.textContent = parked
-      ? '挂 P 后的版面：54sp 时钟、三张状态卡（电量 / 车外 / 空调），速度环收到右下角 40%×58%。'
-      : '大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 自动换成时钟、三张状态卡和右下角速度环。';
-    stageChips.innerHTML = (parked ? '时钟|状态卡|速度环|日期' : '状态栏|阈值轨|270° 功率弧|路径小图')
-      .split('|').map(x => `<span>${x}</span>`).join('');
+    if (land) {
+      stageDesc.textContent = parked
+        ? '横屏驻车：左栏换成 38sp 时钟与三张竖排卡，功率淡出；速度环缩到中栏右下角 46%×62%，行程卡原位不动，三栏宽度同步做 420ms 过渡。'
+        : '横屏行车：功率在左、速度与档位居中、本次行程在右；底栏换成左侧竖排导航，三栏按 0.80 : 1.20 : 0.84 分配宽度，挂 P 时一起做 420ms 过渡。';
+      stageChips.innerHTML = (parked ? '38sp 时钟|三张竖卡|右下速度环|三栏过渡' : '左侧竖排导航|左功率|中速度|右行程')
+        .split('|').map(x => `<span>${x}</span>`).join('');
+    } else {
+      stageDesc.textContent = parked
+        ? '挂 P 后的版面：54sp 时钟 + 电量 / 车外 / 空调三张卡；速度环缩到右下角 40%×58%，功率表和六格行程留在原位。'
+        : '大数字车速按 5 段配色，下面一条阈值轨；右侧是本次行程的形状与六项读数。挂 P 时速度环滑到右下角，420ms 过渡。';
+      stageChips.innerHTML = (parked ? '时钟|三张状态卡|右下速度环|六格行程' : '状态栏|阈值轨|270° 功率弧|路径小图')
+        .split('|').map(x => `<span>${x}</span>`).join('');
+    }
   }
   function setMode(mode) {
     simCl.dataset.mode = mode;
+    simClLand.dataset.mode = mode;
+    setShift(simCl, mode === 'parked' ? 'P' : 'D');
+    setShift(simClLand, mode === 'parked' ? 'P' : 'D');
     $$('.pd-switch button').forEach(b => b.classList.toggle('on', b.dataset.modeBtn === mode));
     if (view !== 'cluster') setView('cluster');
+    if (reduce) {
+      simSpeed = mode === 'parked' ? 0 : 92;
+      simPower = mode === 'parked' ? 0 : 57;
+      driveRoots.forEach(root => drawCluster(root, simSpeed, simPower));
+    }
     syncClusterCopy();
   }
   $$('.pd-switch button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.modeBtn)));
+
+  function setOrient(o) {
+    orient = o;
+    simStage.classList.toggle('land', o === 'landscape');
+    $$('#orientSwitch button').forEach(b => b.classList.toggle('on', b.dataset.orient === o));
+    // 横屏壳刚显示时补一帧：它一直在收 rAF 的数值，但首帧前可能是旧数据。
+    if (o === 'landscape') drawCluster(simClLand, simSpeed, simPower);
+    fitLandscape();
+    syncClusterCopy();
+  }
+  // 横屏壳按可用栏宽缩放。CSS 里的 (100vw - 64px)/798 得到的是长度不是数字，
+  // 不能直接给 scale()，所以这一步放在 JS；窄屏时整块缩放到不溢出。
+  function fitLandscape() {
+    if (!simStage.classList.contains('land')) return;
+    const sim = simStage.parentElement;
+    const avail = Math.max(280, sim.clientWidth - (innerWidth > 1100 ? 270 : 0));
+    let s = Math.min(1, avail / 798);
+    if (innerHeight <= 940) s = Math.min(s, .82);
+    simStage.style.setProperty('--pls', s.toFixed(4));
+  }
+  addEventListener('resize', fitLandscape);
+  $$('#orientSwitch button').forEach(b => b.addEventListener('click', () => setOrient(b.dataset.orient)));
 
   /* ---------- 折叠分区 ---------- */
   $$('.coll-h').forEach(btn => btn.addEventListener('click', () => {
@@ -2617,41 +2982,6 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   }
   accelBtn.addEventListener('click', runAccel);
   accelCancel.addEventListener('click', accelReset);
-
-  /* ---------- 接续浮层 ---------- */
-  const pill = $('#resumePill');
-  const pillMain = $('#resumeMain');
-  let pillHide = null;
-  const resetPill = () => {
-    pill.classList.remove('ack');
-    pillMain.textContent = '⟳ 接续上一段 · 14:32 结束';
-  };
-  function showResume() {
-    resetPill();
-    pill.classList.add('show');
-    clearTimeout(pillHide);
-    pillHide = setTimeout(() => {
-      pill.classList.remove('show');
-      resetPill();
-      setTimeout(showResume, 4200);
-    }, 7000);
-  }
-  setTimeout(showResume, 2400);
-  pillMain.addEventListener('click', () => {
-    if (pill.classList.contains('ack')) return;
-    pill.classList.add('ack');
-    pillMain.textContent = '✓ 已接续 · 本段从 13:58 起';
-    clearTimeout(pillHide);
-    pillHide = setTimeout(() => {
-      pill.classList.remove('show');
-      resetPill();
-    }, 2800);
-  });
-  $('#resumeX').addEventListener('click', () => {
-    pill.classList.remove('show');
-    clearTimeout(pillHide);
-    setTimeout(showResume, 5000);
-  });
 
   /* ---------- 初始视图 ---------- */
   setView('cluster');
