@@ -547,6 +547,10 @@ private fun tripColor(kmh: Float): Color = when {
 /**
  * 高德栅格瓦片（公开端点，无需 API key）。注意：高德瓦片是 GCJ-02 坐标系，
  * 打点前必须把 WGS-84 轨迹转成 GCJ-02，否则整体偏移 100–700 m。
+ *
+ * 授权边界：这个端点不是高德开放平台接口，仅限个人非商业使用；需要商用或大流量
+ * 请换成自己申请了授权的底图源（改这一个 tile source 即可）。高德调整策略时同样换源。
+ * 出处与第三方服务声明见根目录 NOTICE。
  */
 private val amapTiles = object : OnlineTileSourceBase(
     "AMap", 3, 19, 256, ".png", arrayOf("https://wprd01.is.autonavi.com/")

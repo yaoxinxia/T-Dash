@@ -1,0 +1,64 @@
+T-Dash
+Copyright 2026 T-Dash Authors
+
+This product includes software developed as part of the T-Dash project
+(https://github.com/yaoxinxia/T-Dash), licensed under the Apache License, Version 2.0.
+
+===============================================================================
+Protocol definitions
+===============================================================================
+
+The Protocol Buffers definitions under `app/src/main/proto/` are taken from
+Tesla's open-source repository:
+
+  teslamotors/vehicle-command — https://github.com/teslamotors/vehicle-command
+  Licensed under the Apache License, Version 2.0.
+
+These `.proto` files are used as the machine-readable protocol contract for the
+Vehicle Security (VCSEC) and Infotainment domains. The build generates lite Java
+bindings from them (e.g. `*OuterClass`). Any modification to those files is limited
+to build compatibility; the protocol semantics are the upstream definitions.
+
+The protocol implementation in this project (`app/src/main/java/com/teslalink/app/protocol/`,
+`ble/`, `vehicle/`) is an independent Kotlin implementation written for T-Dash against
+those published definitions and the official Go reference in the same upstream repository.
+
+===============================================================================
+Third-party reference material (not shipped, not copied)
+===============================================================================
+
+During development, community implementations of Tesla's Bluetooth key protocol — in
+particular `esphome/tesla-ble` and its forks, licensed under AGPL-3.0 — were used only as
+an observational reference for protocol behaviour on real vehicles. No source code,
+message framing, or structure was copied from any AGPL-licensed project into this
+repository, and no AGPL-licensed code is distributed with this product. Reference clones
+are kept outside the repository and are excluded by `.gitignore`.
+
+===============================================================================
+Optional third-party network services
+===============================================================================
+
+This app talks to a vehicle over Bluetooth Low Energy only. Network access is used for
+three optional features, and every such request is sent directly from the user's device to
+the third party — never through a server operated by this project:
+
+  * Map tiles for the Stats page: AMap public raster tiles
+    (https://wprd01.is.autonavi.com/appmaptile). This endpoint is not part of the AMap
+    Open Platform API; it is intended for personal, non-commercial use only. Users who
+    need commercial or high-volume usage must switch to a licensed tile source.
+  * Reverse geocoding for the accident assistant: AMap Web Service API with the user's own
+    API key, falling back to OpenStreetMap Nominatim.
+  * Weather for the dashboard: AMap Web Service API with the user's own API key
+    (disabled by default).
+
+OpenStreetMap / Nominatim usage is subject to the OpenStreetMap Foundation usage policy.
+AMap usage is subject to AutoNavi/AMap terms; an API key must be applied for by the user.
+
+===============================================================================
+No warranty
+===============================================================================
+
+This software is provided "AS IS", without warranty of any kind. It is not affiliated
+with, endorsed by, or approved by Tesla, Inc. "Tesla" and "Model 3" are trademarks of
+Tesla, Inc. and are used only to describe compatibility. Use only on vehicles you own or
+are authorized to operate, obey local law, and never operate the phone while driving.

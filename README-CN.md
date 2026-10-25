@@ -8,7 +8,8 @@ T-Dash 是一款**开源免费**的 Tesla 仪表盘 App（非官方），**纯�
 [teslamotors/vehicle-command](https://github.com/teslamotors/vehicle-command)
 定义的 Vehicle Security / Infotainment 协议，用 Kotlin 从零实现；`.proto` 定义取自官方仓库。
 
-> **免责声明**：本项目与 Tesla, Inc. 无隶属关系，仅供个人车辆管理与学习使用。
+> **免责声明**：本项目与 Tesla, Inc. 无隶属关系，仅供**你本人拥有或有权操作的车辆**做个人管理与学习使用，
+> 不得用于未经授权访问他人车辆。
 > 使用即表示你理解：向车辆发送指令属于你自己承担风险的操作；驾驶中请勿操作手机，控制结果以车辆本身为准。
 
 ## 能力边界（先读这个）
@@ -202,8 +203,8 @@ keyPassword=...
 
 ### 协议实现与测试
 
-- `app/src/main/proto/` 下的 `.proto` 取自 `teslamotors/vehicle-command`，构建时生成
-  `*OuterClass` 等 lite 绑定。
+- `app/src/main/proto/` 下的 `.proto` 取自 `teslamotors/vehicle-command`（上游 Apache-2.0，
+  出处与许可声明见根目录 `NOTICE`），构建时生成 `*OuterClass` 等 lite 绑定。
 - 协议核心在 `protocol/`：`Crypto.kt`（P-256 ECDH、AES-GCM、HMAC-SHA256）、
   `Session.kt`（命令签名/响应解密、会话导出恢复）、`Dispatcher.kt`（会话管理、
   请求-响应匹配、缓存与重同步）、`Metadata.kt`（TLV）、`Errors.kt`（错误分类、
@@ -281,6 +282,8 @@ app/src/test/                   官方协议测试向量移植 + 行程数据回
 - **日志最小化**：日志只出现密钥指纹末四位。
 
 ## Acknowledgements
+
+协议定义、第三方参考材料与可选联网服务的出处与许可声明，见根目录 [NOTICE](NOTICE)。
 
 - [teslamotors/vehicle-command](https://github.com/teslamotors/vehicle-command)（Apache-2.0）
   ——协议定义与 `.proto` 文件来源。

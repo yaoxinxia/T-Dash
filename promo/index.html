@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>T-Dash · 开源免费的 Tesla 仪表盘 App</title>
-<meta name="description" content="T-Dash —— 开源免费的 Tesla 仪表盘 App（非官方、非盈利）：仪表、控制、行程、事故取证、行车记录一个 App 全都有。行驶中只发一条车辆数据请求，车速 250 ms 起一刷，纯蓝牙直连，钥匙不出手机、T-Dash 没有服务器，Apache-2.0 开源免费。">
+<meta name="description" content="T-Dash —— 开源免费的 Tesla 仪表盘 App（非官方、不收费）：仪表、控制、行程、事故取证、行车记录一个 App 全都有。行驶中只发一条车辆数据请求，车速 250 ms 起一刷，纯蓝牙直连，钥匙不出手机、T-Dash 没有服务器，Apache-2.0 开源免费。">
 <style>
 /* ============ tokens（与 app 的 TL 主题同源） ============ */
 :root{
@@ -938,7 +938,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   <div class="wrap">
     <section class="hero" aria-label="介绍">
       <div class="hero-copy">
-        <span class="eyebrow">非官方 · 非盈利 · 纯蓝牙直连</span>
+        <span class="eyebrow">非官方 · 不收费 · 纯蓝牙直连</span>
         <h1>开源免费的<br><span class="grad">Tesla 仪表盘 App</span></h1>
         <p class="slogan">不用加装一块屏，仪表盘就在手里。</p>
         <p class="lead">仪表、控制、行程、事故取证、行车记录，<b>一个 App 全都有</b>。行驶中只发<b>一条</b>车辆数据请求，车速 <b>250 ms</b> 起一刷，指令 <b>50–300 ms</b> 往返；蓝牙直连，钥匙不出手机，<b>T-Dash 没有服务器</b>，也没有遥测。</p>
@@ -2648,7 +2648,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <div class="security reveal">
         <div>
           <span class="eyebrow">Security</span>
-          <h2>绝对安全：<span class="h2-keep">T-Dash 没有服务器。</span></h2>
+          <h2>安全设计：<span class="h2-keep">T-Dash 没有服务器。</span></h2>
           <p>T-Dash 是纯蓝牙应用：没有账号、没有遥测、没有云端，也不运营后端、API 端点或云同步。手机与车辆之间只有 BLE 直连——不存在集中存放车主数据的数据库，也没有可供开发者查询数据的管理后台。</p>
           <p style="margin-top:12px">首次启动时随机生成一把 P-256 钥匙。私钥用 AndroidKeyStore 的 AES-256-GCM 封装后存放，配对时只把公钥交给车；日志里只出现指纹末四位。</p>
           <ul class="sec-list">
@@ -2757,7 +2757,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
         </span>
         T-Dash <small>v0.0.2</small>
       </div>
-      <p style="margin-top:12px">T-Dash 是纯蓝牙的 Tesla 安卓伴侣。协议层来自 teslamotors/vehicle-command 的公开定义，本项目与其无隶属关系，也与 Tesla, Inc. 无关。仅供个人车辆管理与学习使用。</p>
+      <p style="margin-top:12px">T-Dash 是纯蓝牙的 Tesla 安卓伴侣。协议层来自 teslamotors/vehicle-command 的公开定义，本项目与其无隶属关系，也与 Tesla, Inc. 无关。仅供你本人拥有或有权操作的车辆使用，不得用于未经授权访问他人车辆。</p>
     </div>
     <div class="meta">
       <b>车辆链路</b> BLE · 无云端<br>

@@ -10,10 +10,11 @@ Infotainment protocols defined by Tesla's official open-source library
 [teslamotors/vehicle-command](https://github.com/teslamotors/vehicle-command); the `.proto`
 definitions come from that repository.
 
-> **Disclaimer**: This project is not affiliated with Tesla, Inc. It is intended for personal
-> vehicle management and learning. By using it you acknowledge that sending commands to your
-> vehicle is done at your own risk; never operate the phone while driving, and treat the
-> vehicle's own behavior as the authoritative result.
+> **Disclaimer**: This project is not affiliated with Tesla, Inc. It is intended only for
+> vehicles you own or are authorized to operate, for personal management and learning, and must
+> not be used to access vehicles without authorization. By using it you acknowledge that sending
+> commands to your vehicle is done at your own risk; never operate the phone while driving, and
+> treat the vehicle's own behavior as the authoritative result.
 
 ## Scope and limits (read this first)
 
@@ -257,7 +258,8 @@ keyPassword=...
 
 ### Protocol implementation and tests
 
-- The `.proto` files under `app/src/main/proto/` come from `teslamotors/vehicle-command`; the
+- The `.proto` files under `app/src/main/proto/` come from `teslamotors/vehicle-command`
+  (upstream Apache-2.0; provenance and license notices live in the root `NOTICE` file); the
   build generates lite bindings such as `*OuterClass`.
 - The protocol core is in `protocol/`: `Crypto.kt` (P-256 ECDH, AES-GCM, HMAC-SHA256),
   `Session.kt` (command signing / response decryption, session export and restore),
@@ -354,6 +356,9 @@ remotely.
 - **Logs are minimized**: only the last four digits of key fingerprints ever appear in logs.
 
 ## Acknowledgements
+
+Provenance and license notices for the protocol definitions, the third-party reference
+material, and the optional network services live in the root [NOTICE](NOTICE) file.
 
 - [teslamotors/vehicle-command](https://github.com/teslamotors/vehicle-command) (Apache-2.0) —
   source of the protocol definitions and `.proto` files.

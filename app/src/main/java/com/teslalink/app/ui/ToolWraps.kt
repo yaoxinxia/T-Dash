@@ -314,8 +314,8 @@ fun WrapsSection(container: AppContainer) {
                     style = MaterialTheme.typography.bodySmall, color = TL.textMid,
                 )
                 Text(
-                    "· 你这块盘里三张全是 1024×1024 RGBA PNG（188~798 KB），文件名车机不会改，" +
-                        "那个 54978661417222145.png 是下载时自带的编号",
+                    "· 车机不改文件名，列表里的名字就是你认图的唯一线索——常见下载源会带一串数字编号，" +
+                        "导入时保留原名",
                     style = MaterialTheme.typography.bodySmall, color = TL.textLow,
                 )
                 Text(
