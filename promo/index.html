@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>T-Dash · 不用加装一块屏，仪表盘就在手里</title>
-<meta name="description" content="T-Dash 是非官方、非盈利的 Tesla 安卓伴侣：仪表、控制、行程、事故取证、行车记录一个 App 全都有。行驶中只发一条车辆数据请求，车速 250 ms 起一刷，纯蓝牙直连，钥匙不出手机、T-Dash 没有服务器，Apache-2.0 开源免费。">
+<title>T-Dash · 开源免费的 Tesla 仪表盘 App</title>
+<meta name="description" content="T-Dash —— 开源免费的 Tesla 仪表盘 App（非官方、非盈利）：仪表、控制、行程、事故取证、行车记录一个 App 全都有。行驶中只发一条车辆数据请求，车速 250 ms 起一刷，纯蓝牙直连，钥匙不出手机、T-Dash 没有服务器，Apache-2.0 开源免费。">
 <style>
 /* ============ tokens（与 app 的 TL 主题同源） ============ */
 :root{
@@ -63,6 +63,8 @@ header{
 }
 .mark svg{width:100%;height:100%;display:block}
 .brand small{color:var(--low);font-size:10.5px;font-weight:500;letter-spacing:.08em;margin-left:2px}
+.brand .tag{font-style:normal;font-size:11.5px;font-weight:500;color:var(--mid);letter-spacing:.02em;
+  margin-left:10px;padding-left:12px;border-left:1px solid var(--hairline);white-space:nowrap}
 .nav-links{display:flex;align-items:center;gap:26px;font-size:13px;color:var(--mid)}
 .nav-links a{transition:color .2s}
 .nav-links a:hover{color:var(--hi)}
@@ -75,7 +77,8 @@ header{
 .hero{padding:54px 0 44px;display:grid;grid-template-columns:1.02fr 1.16fr;gap:52px;align-items:center}
 .hero-copy h1{font-size:clamp(40px,4.6vw,62px);line-height:1.06;letter-spacing:-.035em;font-weight:700}
 .hero-copy h1 span{display:block;margin-top:6px}
-.hero-copy .lead{margin-top:22px;font-size:15.5px;line-height:1.72;color:var(--mid);max-width:470px}
+.hero-copy .slogan{margin-top:16px;font-size:21px;font-weight:600;letter-spacing:-.01em;color:var(--hi)}
+.hero-copy .lead{margin-top:20px;font-size:15.5px;line-height:1.72;color:var(--mid);max-width:470px}
 .hero-copy .lead b{color:var(--hi);font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
 .chip{
@@ -869,6 +872,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   section{padding:68px 0}
   .hero{padding-top:38px}
   .hero-copy h1{font-size:clamp(34px,10vw,44px)}
+  .hero-copy .slogan{font-size:17px}
   .hero-copy .lead{font-size:14px}
   .pwrap{--ps:.86;width:100%}
   .phone{box-shadow:0 40px 80px -40px #000,inset 0 0 0 1px #46525F,inset 0 0 0 3px #0A0E12}
@@ -878,6 +882,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   .stats-strip div{padding:18px 16px}
   .stats-strip b{font-size:21px}
   .nav-links{display:none}
+  .brand .tag{display:none}
   .path-row{grid-template-columns:60px 1fr 78px;gap:8px}
   .path-badge{font-size:9px}
   .place-stage{padding:10px;border-radius:20px}
@@ -914,7 +919,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <span class="mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="#3E6AE1"/><g transform="translate(12 12.6) scale(0.3) translate(-54 -55)"><path fill="#FFFFFF" d="M54,30 L78,42 L54,54 L30,42 Z"/><path fill="#FFFFFF" d="M38,50 L54,58 L70,50 L70,60 L54,68 L38,60 Z"/><path fill="#FFFFFF" d="M42,66 L54,72 L66,66 L66,74 L54,80 L42,74 Z"/></g></svg>
       </span>
-      T-Dash <small>v0.0.2</small>
+      T-Dash <small>v0.0.2</small><em class="tag">开源免费的 Tesla 仪表盘 App</em>
     </div>
     <nav class="nav-links" aria-label="页面导航">
       <a href="#screens">功能</a>
@@ -933,9 +938,10 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
   <div class="wrap">
     <section class="hero" aria-label="介绍">
       <div class="hero-copy">
-        <span class="eyebrow">Tesla companion · 非官方 · 非盈利 · 纯蓝牙直连</span>
-        <h1>不用加装一块屏，<br><span class="grad">仪表盘就在手里。</span></h1>
-        <p class="lead">仪表、控制、行程、事故取证、行车记录，<b>一个 App 全都有</b>。行驶中只发<b>一条</b>车辆数据请求，车速 <b>250 ms</b> 起一刷，指令 <b>50–300 ms</b> 往返；蓝牙直连，钥匙不出手机，<b>T-Dash 没有服务器</b>，也没有遥测。开源、免费、协议开放。</p>
+        <span class="eyebrow">非官方 · 非盈利 · 纯蓝牙直连</span>
+        <h1>开源免费的<br><span class="grad">Tesla 仪表盘 App</span></h1>
+        <p class="slogan">不用加装一块屏，仪表盘就在手里。</p>
+        <p class="lead">仪表、控制、行程、事故取证、行车记录，<b>一个 App 全都有</b>。行驶中只发<b>一条</b>车辆数据请求，车速 <b>250 ms</b> 起一刷，指令 <b>50–300 ms</b> 往返；蓝牙直连，钥匙不出手机，<b>T-Dash 没有服务器</b>，也没有遥测。</p>
         <div class="chips">
           <span class="chip"><i></i>九块屏 · 一个 App</span>
           <span class="chip blue"><i></i>无需账号 · 没有订阅</span>
