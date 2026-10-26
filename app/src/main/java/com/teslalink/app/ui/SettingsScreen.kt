@@ -557,7 +557,7 @@ fun SettingsScreen(
 
         CollapsibleSection(
             "关于与开发者",
-            "v0.0.2 · 开发者模式" + if (devMode) "开" else "关",
+            "v0.0.3 · 开发者模式" + if (devMode) "开" else "关",
         ) {
         Panel(
             title = "开发者模式",
@@ -576,7 +576,7 @@ fun SettingsScreen(
 
         SectionLabel("关于")
         Panel(tight = true) {
-            KeyValue("版本", "T-Dash v0.0.2")
+            KeyValue("版本", "T-Dash v0.0.3")
             KeyValue("项目性质", "非官方开源项目，与 Tesla, Inc. 无隶属关系，也不接入任何官方账号体系")
             KeyValue("担保", "按「原样」提供，不提供任何担保；仅供你本人拥有或有权操作的车辆使用")
             KeyValue("通道", "蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）")

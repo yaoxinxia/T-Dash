@@ -201,8 +201,10 @@ keyPassword=...
 
 - `storeFile` 按 `app` 模块目录解析，写绝对路径也可以。
 - 没有该文件时 `release` 构建不会挂签名配置，产物为未签名 APK；日常调试用 `assembleDebug` 即可。
-- `versionCode` / `versionName` 在 `app/build.gradle.kts`。当前版本文案另有硬编码：
-  `SettingsScreen.kt` 的「关于」区和 `promo/index.html` 页脚，发版时三处一起改。
+- `versionCode` / `versionName` 在 `app/build.gradle.kts`。版本文案另有硬编码，发版时一起改：
+  `SettingsScreen.kt`（「关于」的版本行 + 开发者模式标题）、`WeatherService.kt`（请求 UA）、
+  `promo/index.html`（页头与页脚版本、两处下载按钮、Release 说明、模拟器里的设置页示意）、
+  `README.md` 徽章、`scratch/xhs_template.html`（小红书卡）。promo 改完要同步 `dist/` 并重新发布站点。
 
 ### 协议实现与测试
 

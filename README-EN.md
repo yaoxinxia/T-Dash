@@ -255,9 +255,13 @@ keyPassword=...
 - `storeFile` resolves relative to the `app` module directory; absolute paths also work.
 - Without that file the `release` build simply carries no signing config and produces an
   unsigned APK; use `assembleDebug` for day-to-day work.
-- `versionCode` / `versionName` live in `app/build.gradle.kts`. Version text is also hardcoded
-  in two more places: the "About" section of `SettingsScreen.kt` and the `promo/index.html`
-  footer — update all three together on release.
+- `versionCode` / `versionName` live in `app/build.gradle.kts`. Version text is hardcoded in
+  more places, and a release updates all of them: `SettingsScreen.kt` (the About version line
+  plus the developer-mode heading), `WeatherService.kt` (request User-Agent),
+  `promo/index.html` (header and footer versions, both download buttons, the release note and
+  the settings mock inside the simulator), the `README.md` badges, and
+  `scratch/xhs_template.html` (the promo cards). After touching `promo/`, copy it to `dist/`
+  and republish the site.
 
 ### Protocol implementation and tests
 

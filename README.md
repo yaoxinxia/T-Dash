@@ -14,8 +14,8 @@ Tesla's open [vehicle-command](https://github.com/teslamotors/vehicle-command) p
 **Read this in:** [简体中文](README-CN.md) · [English](README-EN.md)
 
 [![Live site](https://img.shields.io/badge/live%20site-35C6E0)](https://tdash-jb9s5m4ncnw.qoder.website)
-[![Download](https://img.shields.io/badge/download-v0.0.2-4C8DFF)](https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.2/T-Dash-0.0.2.apk)
-[![Release](https://img.shields.io/badge/releases-v0.0.2-3BC46B)](https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.2)
+[![Download](https://img.shields.io/badge/download-v0.0.3-4C8DFF)](https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.3/T-Dash-0.0.3.apk)
+[![Release](https://img.shields.io/badge/releases-v0.0.3-3BC46B)](https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.3)
 [![License](https://img.shields.io/badge/license-Apache--2.0-647382)](LICENSE)
 
 > Not affiliated with Tesla, Inc. For personal vehicle management and learning. Commands are
