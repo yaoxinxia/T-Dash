@@ -9,12 +9,14 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** BLE link + command execution + key pairing. */
 class LinkViewModel(private val c: AppContainer) : ViewModel() {
 
-    enum class PairingPhase { IDLE, SENDING, WAITING_CONFIRM, PAIRED, FAILED }
+    enum class PairingPhase { IDLE, WAITING_LINK, SENDING, WAITING_CONFIRM, PAIRED, FAILED }
 
     data class LogEntry(
         val time: Long,
@@ -33,7 +35,7 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
     val log = MutableStateFlow<List<LogEntry>>(emptyList())
     val pairingPhase = MutableStateFlow(PairingPhase.IDLE)
 
-    /** 车辆对配对请求的回执（含中文解释），null = 车辆没回话。 */
+    /** 配对流程最近一条说明：车辆对配对请求的回执（含中文解释），或这次没发出的原因。null = 还没有。 */
     val pairingAck = MutableStateFlow<String?>(null)
     val busy = MutableStateFlow(false)
 
@@ -326,9 +328,11 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
         // confusing results exactly when he can't afford another car trip.
         if (pairingJob?.isActive == true) return
         pairingJob = viewModelScope.launch {
-            pairingPhase.value = PairingPhase.SENDING
+            pairingPhase.value = PairingPhase.WAITING_LINK
             pairingAck.value = null
             try {
+                awaitLinkForPairing()
+                pairingPhase.value = PairingPhase.SENDING
                 c.connection.exclusiveAction { c.connection.sendAddKeyRequest() }.also { pairingAck.value = it }
                 pairingPhase.value = PairingPhase.WAITING_CONFIRM
                 val deadline = System.currentTimeMillis() + 120_000
@@ -344,10 +348,30 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
                     }
                 }
                 pairingPhase.value = PairingPhase.FAILED
+                pairingAck.value = "2 分钟内没有检测到配对完成。常见原因：没刷卡、车机上没点确认，或确认时选了非车主权限。"
             } catch (e: Exception) {
                 pairingPhase.value = PairingPhase.FAILED
+                pairingAck.value = e.message ?: e.javaClass.simpleName
                 appendLog("发送配对请求", false, e.message, 0)
             }
+        }
+    }
+
+    /**
+     * 这颗按钮不许被禁用，所以链路没通时把这次点击理解成「先连上再发」。
+     * CONNECTING 时只在旁边等，绝不重入 connect()：那会 bump linkGeneration，把正在跑的建链打断。
+     */
+    private suspend fun awaitLinkForPairing() {
+        if (c.connection.state.value == VehicleConnection.State.CONNECTED) return
+        if (vin.value.length != 17) throw IllegalStateException("还没填 17 位 VIN：先填 VIN 再点")
+        if (c.connection.state.value == VehicleConnection.State.DISCONNECTED) connect()
+        val up = withTimeoutOrNull(25_000) {
+            c.connection.state.first { it == VehicleConnection.State.CONNECTED }
+        } != null
+        if (!up) {
+            throw IllegalStateException(
+                "车辆链路 25 秒内没通：车可能休眠、不在范围，或被官方 App 占着连接。到车旁再点一次。"
+            )
         }
     }
 

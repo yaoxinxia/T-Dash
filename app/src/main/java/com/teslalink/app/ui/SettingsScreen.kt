@@ -748,13 +748,15 @@ private fun ConnectionControls(link: com.teslalink.app.vm.LinkViewModel) {
                     stateLine = if (vin.length != 17) "需要 17 位 VIN" else null,
                 )
                 ActionTile(
-                    "断开",
+                    // 扫描/建链最长 20 秒，这期间必须能中止，所以不看 busy：disconnect() 会顶掉
+                    // linkGeneration，在跑的 connect() 自己收尾。
+                    if (state == VehicleConnection.State.CONNECTING) "取消连接" else "断开",
                     onClick = {
                         link.disconnect()
                         note = Tone.Good to "已断开：自动重连不会再自行拉起，点「扫描并连接」恢复"
                     },
                     modifier = Modifier.width(96.dp),
-                    enabled = state != VehicleConnection.State.DISCONNECTED && !busy,
+                    enabled = state != VehicleConnection.State.DISCONNECTED,
                 )
             }
         }
@@ -771,15 +773,22 @@ private fun ConnectionControls(link: com.teslalink.app.vm.LinkViewModel) {
                     LinkViewModel.PairingPhase.IDLE -> ActionTile(
                         "发送配对请求",
                         onClick = link::sendPairingRequest,
-                        enabled = connected,
                         emphasize = true,
                         tone = Tone.Info,
-                        stateLine = if (!connected) "需要先连接车辆" else null,
+                        stateLine = if (!connected) "链路还没通：点了会先把车连上，连上自动发送" else null,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    LinkViewModel.PairingPhase.SENDING -> {
+                    LinkViewModel.PairingPhase.WAITING_LINK,
+                    LinkViewModel.PairingPhase.SENDING,
+                    -> {
                         LinearProgressIndicator(Modifier.fillMaxWidth(), color = TL.accent)
-                        Text("正在发送…", style = MaterialTheme.typography.bodySmall, color = TL.textMid)
+                        Text(
+                            if (pairing == LinkViewModel.PairingPhase.WAITING_LINK)
+                                "正在建立车辆链路，通了自动发送配对请求…"
+                            else "正在发送…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TL.textMid,
+                        )
                     }
                     LinkViewModel.PairingPhase.WAITING_CONFIRM -> {
                         LinearProgressIndicator(Modifier.fillMaxWidth(), color = TL.warn)
@@ -794,6 +803,7 @@ private fun ConnectionControls(link: com.teslalink.app.vm.LinkViewModel) {
                         Text("配对成功。", style = MaterialTheme.typography.titleMedium, color = TL.good)
                     LinkViewModel.PairingPhase.FAILED -> {
                         Text("配对未完成。", style = MaterialTheme.typography.titleMedium, color = TL.bad)
+                        ack?.let { HintBar(it, Tone.Bad) }
                         ActionTile("重试", onClick = link::resetPairing, modifier = Modifier.fillMaxWidth())
                     }
                 }
