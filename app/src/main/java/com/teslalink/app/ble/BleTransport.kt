@@ -259,15 +259,30 @@ class BleTransport(
                 }
             }
         } catch (e: GattFailedException) {
+            releaseGatt()
             throw IllegalStateException(
                 "GATT 连接被设备断开${e.reason?.let { "：$it" } ?: "（BLE 连接已满、设备不在范围或蓝牙栈抖动）"}"
             )
         } catch (e: TimeoutCancellationException) {
+            releaseGatt()
             throw IllegalStateException(
                 "GATT 连接在 ${gattTimeoutMs / 1000} 秒内未完成" +
                     "${connectFailReason?.let { "：$it" } ?: "（连接已满或车机休眠）"}"
             )
         }
+    }
+
+    /**
+     * 失败路径必须 close。只 disconnect() 的话 BluetoothGatt 的回调还注册着，而
+     * 「记住的地址直连失败 → 回退扫描重连」会在同一个 transport 上再开一个 GATT，
+     * 前一个再也没人释放：手机侧攒僵尸连接，车那边 3 条上限也被占着，
+     * 表现就是越试越连不上（status=133 / 一直超时）。
+     */
+    private fun releaseGatt() {
+        runCatching { gatt?.disconnect() }
+        runCatching { gatt?.close() }
+        gatt = null
+        _state.value = ConnectionState.DISCONNECTED
     }
 
     private class GattFailedException(val reason: String?) :

@@ -159,6 +159,9 @@ class VehicleConnection(
             // Remember the address that worked so the next connect skips discovery.
             connectedAddr?.let { prefs.putString("ble_direct_addr", it) }
         } catch (e: Exception) {
+            // 建链失败绝不能把 GATT 留在原地：下一次 connect() 会再开一个，
+            // 车侧 3 条 BLE 上限被自己的僵尸连接占掉，之后就永远连不上了。
+            transport.disconnect()
             _state.value = State.DISCONNECTED
             throw e
         }
@@ -910,7 +913,11 @@ class VehicleConnection(
             return null
         }
         val parts = mutableListOf<String>()
-        msg.nominalError?.let { parts.add("车辆报错=${it.genericError.name}") }
+        // GENERICERROR_NONE 的字面意思就是"没有错误"：车辆给完全成功的应答也会挂这个字段。
+        // 原来无条件打印"车辆报错=GENERICERROR_NONE"，把受理读成了报错。
+        msg.nominalError?.genericError?.takeIf {
+            it != com.tesla.generated.errors.Errors.GenericError_E.GENERICERROR_NONE
+        }?.let { parts.add("车辆报错=${it.name}") }
         if (msg.hasCommandStatus()) {
             val status = msg.commandStatus
             parts.add("操作状态=${status.operationStatus.name}")
@@ -922,7 +929,9 @@ class VehicleConnection(
                 parts.add("签名=${status.signedMessageStatus.signedMessageInformation.name}")
             }
         }
-        return if (parts.isEmpty()) null else parts.joinToString(" ")
+        // 没有任何可读信息就返回 null：调用方拿它当"这帧不是我们要的回执"的过滤器，
+        // 改成非 null 会让配对请求被一帧无关的 protobuf 提前判定为已回执。
+        return parts.ifEmpty { null }?.joinToString(" ")
     }
 
     /**
