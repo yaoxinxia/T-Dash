@@ -152,7 +152,15 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
         !manualDisconnect.value && vin.value.length == 17 &&
             (c.appInForeground.value || c.drivingUntilMs.value > System.currentTimeMillis())
 
+    /** 配对正占着链路：发请求中 / 等链路 / 等刷卡确认，这三段不许自动重连进来抢。 */
+    private fun pairingHoldsLink(): Boolean =
+        pairingJob?.isActive == true && pairingPhase.value in
+            setOf(PairingPhase.WAITING_LINK, PairingPhase.SENDING, PairingPhase.WAITING_CONFIRM)
+
     private fun startAutoReconnect() {
+        // 配对流程持有链路（发请求 + 120 秒轮询），重连每 2-15 秒的整轮
+        // disconnect→扫描会把正在等刷卡的链路冲掉，配对期间一律让路。
+        if (pairingHoldsLink()) return
         if (reconnectJob?.isActive == true) return
         reconnectJob = viewModelScope.launch {
             autoReconnecting.value = true
@@ -353,6 +361,14 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
                 pairingPhase.value = PairingPhase.FAILED
                 pairingAck.value = e.message ?: e.javaClass.simpleName
                 appendLog("发送配对请求", false, e.message, 0)
+            } finally {
+                // 配对期间自动重连被压住；结束时链路若还断着，把它捡回来，
+                // 否则不会再来一次 DISCONNECTED 发射，app 就永远躺平了。
+                if (c.connection.state.value == VehicleConnection.State.DISCONNECTED &&
+                    shouldAutoReconnect()
+                ) {
+                    startAutoReconnect()
+                }
             }
         }
     }
