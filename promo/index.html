@@ -336,15 +336,21 @@ button.pill{font-family:inherit;cursor:pointer;align-self:flex-start}
 }
 .cl-date{font-size:13px;color:var(--mid);letter-spacing:1px;margin-top:2px}
 .cl-weather{font-size:12px;color:var(--low);letter-spacing:.4px;margin-top:3px}
-/* 行车版面右上角迷你「时间+天气」：驻车大时钟让位给车速后保住一眼可读；行车中天气取数照常（走手机网络，不碰蓝牙） */
+/* 行车版面右上角「时间+天气」：与 App v0.0.4 同步——从一列小灰字改成横向胶囊（时间加大、细分隔线、半透明底+细边），压在轨迹和天空上都读得清 */
 .cl-mini{
-  position:absolute;top:12px;right:14px;z-index:3;text-align:right;
+  position:absolute;top:12px;right:14px;z-index:3;
+  display:flex;align-items:center;gap:8px;
+  padding:5px 11px;border-radius:999px;
+  background:rgba(27,34,42,.72);border:1px solid var(--hairline-soft);
   opacity:0;pointer-events:none;transition:opacity .42s cubic-bezier(.4,0,.2,1);
 }
 .cl:not([data-mode="parked"]) .cl-mini{opacity:1}
-.cl-mini b{display:block;font-size:15px;font-weight:700;letter-spacing:.6px;line-height:1;font-feature-settings:"tnum";color:var(--hi)}
-.cl-mini span{display:block;font-size:10px;color:var(--low);letter-spacing:.4px;margin-top:3px}
-.cl-right .cl-mini{top:10px;right:0}
+.cl-mini b{display:block;font-size:20px;font-weight:700;letter-spacing:.6px;line-height:1;font-feature-settings:"tnum";color:var(--hi)}
+.cl-mini span{display:block;font-size:12px;color:var(--mid);letter-spacing:.4px;white-space:nowrap}
+.cl-mini i{display:block;width:1px;height:14px;background:var(--hairline);flex:none}
+.cl-right .cl-mini{top:10px;right:0;padding:4px 9px;gap:6px}
+.cl-right .cl-mini b{font-size:16px}
+.cl-right .cl-mini span{font-size:11px}
 .pk-cards{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
 .pk{
   background:rgba(27,34,42,.72);border:1px solid var(--hairline-soft);border-radius:12px;
@@ -1023,7 +1029,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                         <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
                       </div>
                     </div>
-                    <div class="cl-mini"><b data-clock>14:32</b><span>多云 18°</span></div>
+                    <div class="cl-mini"><b data-clock>14:32</b><i></i><span>多云 18°</span></div>
                   </div>
 
                   <div class="cl-bottom">
@@ -1170,7 +1176,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                             <div class="pk"><span>空调°C</span><b>22.0</b><small>车内 24.5°</small></div>
                           </div>
                         </div>
-                        <div class="cl-mini"><b data-clock>14:32</b><span>多云 18°</span></div>
+                        <div class="cl-mini"><b data-clock>14:32</b><i></i><span>多云 18°</span></div>
                       </div>
 
                       <div class="cl-bottom">
@@ -1261,7 +1267,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                           </div>
                         </div>
                         <div class="cl-right">
-                          <div class="cl-mini"><b data-clock>14:32</b><span>多云 18°</span></div>
+                          <div class="cl-mini"><b data-clock>14:32</b><i></i><span>多云 18°</span></div>
                           <div class="cl-trip">
                             <div class="route">
                               <svg viewBox="0 0 120 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
