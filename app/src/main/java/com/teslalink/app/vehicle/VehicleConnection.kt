@@ -16,6 +16,9 @@ import com.teslalink.app.protocol.shouldRetry
 import com.teslalink.app.store.KeyManager
 import com.teslalink.app.store.SessionCacheStore
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,10 +28,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * High-level vehicle connection over BLE: sessions, commands, pairing, status.
- * Ports the orchestration in pkg/vehicle/vehicle.go + pkg/connector/ble.
- */
+// The budget includes lock contention, session recovery, transport writes and the response.
+internal suspend fun <T : Any> withReadDeadline(timeoutMs: Long, block: suspend () -> T): T =
+    withTimeoutOrNull(timeoutMs) { block() } ?: throw TeslaError.Timeout(false)
+
 class VehicleConnection(
     private val context: Context,
     private val scope: CoroutineScope,
@@ -113,7 +116,21 @@ class VehicleConnection(
      */
     @Volatile private var linkGeneration = 0
 
-    suspend fun connect(targetVin: String, timeoutMs: Long = 20_000): Boolean {
+    private val connectMutex = Mutex()
+    private var sessionInitJob: kotlinx.coroutines.Job? = null
+    private var lastVehicleDataRequestAt = 0L
+
+    suspend fun connect(targetVin: String, timeoutMs: Long = 20_000): Boolean = connectMutex.withLock {
+        if (vin == targetVin && _state.value == State.CONNECTED) return@withLock true
+        try {
+            connectInner(targetVin, timeoutMs)
+        } catch (e: Exception) {
+            disconnect()
+            throw e
+        }
+    }
+
+    private suspend fun connectInner(targetVin: String, timeoutMs: Long): Boolean {
         disconnect()
         val generation = ++linkGeneration
         vin = targetVin
@@ -141,6 +158,8 @@ class VehicleConnection(
                 com.teslalink.app.debug.DebugLog.log("vehicle", "使用已记录设备地址 $saved 直连（跳过扫描）")
                 try {
                     transport.connectDevice(transport.deviceFromAddress(saved), gattTimeoutMs = timeoutMs)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     // The car may have rotated its address: fall back to scanning by name.
                     com.teslalink.app.debug.DebugLog.error(
@@ -200,6 +219,8 @@ class VehicleConnection(
             // doesn't know our public key yet. Stay connected so the user can pair.
             _keyPaired.value = false
             com.teslalink.app.debug.DebugLog.log("vehicle", "已连接，但公钥未配对（等待配对流程）")
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // GATT works but the handshake failed (busy / refused / malformed reply).
             // Stay connected anyway: the pairing request only needs the raw VCSEC
@@ -207,36 +228,13 @@ class VehicleConnection(
             _keyPaired.value = false
             com.teslalink.app.debug.DebugLog.error("vehicle", "握手未完成: ${e.message}")
         }
-        if (generation != linkGeneration) {
-            com.teslalink.app.debug.DebugLog.error("vehicle", "连接过程已被取消，不标记为已连接")
-            transport.disconnect()
-            return false
+        currentCoroutineContext().ensureActive()
+        if (generation != linkGeneration || transport.state.value != BleTransport.ConnectionState.CONNECTED) {
+            throw TeslaError.NotConnected()
         }
         _state.value = State.CONNECTED
         startKeepAlive(transport)
-        // Always audit the vehicle's keychain (unauthenticated): this is the only way to tell
-        // "the car doesn't have this key" apart from "our session is stale".
-        auditKeychain()
-        if (_keyPaired.value) {
-            // The official library handshakes BOTH domains at connect (StartSession(nil)).
-            // Do the same off the main path so the head unit gets knocked awake instead of
-            // waiting for the first command — and log whichever way it goes.
-            scope.launch {
-                val t0 = System.currentTimeMillis()
-                try {
-                    ensureSession(UniversalMessage.Domain.DOMAIN_INFOTAINMENT)
-                    com.teslalink.app.debug.DebugLog.log(
-                        "vehicle",
-                        "车机域会话已建立（${System.currentTimeMillis() - t0}ms）"
-                    )
-                } catch (e: Exception) {
-                    com.teslalink.app.debug.DebugLog.error(
-                        "vehicle",
-                        "车机域会话未建立（${System.currentTimeMillis() - t0}ms）：${e.message}"
-                    )
-                }
-            }
-        }
+        startSessionInitialization()
         com.teslalink.app.debug.DebugLog.log("vehicle", "连接完成 vin=$targetVin")
         return true
     }
@@ -266,6 +264,8 @@ class VehicleConnection(
                 deadlineMs = 6_000,
             )
             if (reply.hasWhitelistInfo()) reply.whitelistInfo else null
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             log.error("keychain", "免鉴权钥匙链查询失败：${e.message}")
             null
@@ -316,6 +316,8 @@ class VehicleConnection(
         try {
             executeVCSEC(probe, Dispatcher.Auth.GCM, whitelistOperation = false, deadlineMs = 4_000)
             com.teslalink.app.debug.DebugLog.log("vehicle", "缓存会话校验通过")
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             com.teslalink.app.debug.DebugLog.error(
                 "vehicle",
@@ -334,6 +336,8 @@ class VehicleConnection(
             } catch (e2: TeslaError.KeyNotPaired) {
                 _keyPaired.value = false
                 com.teslalink.app.debug.DebugLog.error("vehicle", "车辆不认这把公钥：需要重新配对")
+            } catch (e2: CancellationException) {
+                throw e2
             } catch (e2: Exception) {
                 _keyPaired.value = false
                 com.teslalink.app.debug.DebugLog.error("vehicle", "重新握手失败: ${e2.message}")
@@ -344,6 +348,8 @@ class VehicleConnection(
 
     fun disconnect() {
         linkGeneration++
+        sessionInitJob?.cancel()
+        sessionInitJob = null
         linkWatchJob?.cancel()
         linkWatchJob = null
         keepAliveJob?.cancel()
@@ -376,6 +382,7 @@ class VehicleConnection(
                 if (ble !== transport || _state.value != State.CONNECTED) break
                 if (_exclusive.value) continue
                 if (!keepAliveAllowed()) continue
+                if (android.os.SystemClock.elapsedRealtime() - lastVehicleDataRequestAt < 25_000) continue
                 runCatching {
                     sendAndAwait(
                         UniversalMessage.RoutableMessage.newBuilder()
@@ -439,7 +446,10 @@ class VehicleConnection(
     suspend fun ensureSession(domain: UniversalMessage.Domain, allowWake: Boolean = true): Boolean {
         val d = dispatcher ?: throw TeslaError.NotConnected()
         return try {
-            sessionMutex.withLock { ensureSessionInner(d, domain, allowWake) }
+            sessionMutex.withLock {
+                if (dispatcher !== d) throw TeslaError.NotConnected()
+                ensureSessionInner(d, domain, allowWake)
+            }
         } finally {
             syncSessionFlags()
         }
@@ -457,6 +467,8 @@ class VehicleConnection(
             val handshaked = d.startSession(domain, deadlineMs = 8_000)
             if (handshaked) saveSessions()
             return handshaked
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             if (domain != UniversalMessage.Domain.DOMAIN_INFOTAINMENT) throw e
             if (!allowWake) throw e
@@ -470,9 +482,11 @@ class VehicleConnection(
             val handshaked = d.startSession(domain, deadlineMs = 30_000)
             if (handshaked) saveSessions()
             return handshaked
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            val original = firstError
-            if (original != null && e.message != original.message) {
+            val original = checkNotNull(firstError)
+            if (e.message != original.message) {
                 throw TeslaError.Nominal(
                     "车机域不可达：${original.message}；唤醒后重试：${e.message}"
                 )
@@ -494,12 +508,13 @@ class VehicleConnection(
         timeoutMs: Long,
     ): UniversalMessage.RoutableMessage {
         val d = dispatcher ?: throw TeslaError.NotConnected()
-        val handler = d.send(builder, auth)
-        try {
-            return withTimeoutOrNull(timeoutMs) { handler.channel.receive() }
-                ?: throw TeslaError.Timeout(mayHaveSucceeded = false)
-        } finally {
-            d.closeHandler(handler)
+        return withReadDeadline(timeoutMs) {
+            val handler = d.send(builder, auth)
+            try {
+                handler.channel.receive()
+            } finally {
+                d.closeHandler(handler)
+            }
         }
     }
 
@@ -572,6 +587,8 @@ class VehicleConnection(
             } catch (e: TeslaError) {
                 lastError = e
                 if (!shouldRetry(e)) throw e
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Transport or timeout errors: retry until deadline.
                 lastError = e
@@ -598,14 +615,28 @@ class VehicleConnection(
         attempts: Int = 3,
         timeoutMs: Long = 15_000,
         allowWake: Boolean = true,
-    ): CarServer.Response =
-        infotainmentMutex.withLock {
+    ): CarServer.Response {
+        val owner = dispatcher ?: throw TeslaError.NotConnected()
+        val started = android.os.SystemClock.elapsedRealtime()
+        var stage = "等待车机请求锁"
+        var queueMs = 0L
+        var sessionMs = 0L
+        try {
+        return infotainmentMutex.withLock {
+            queueMs = android.os.SystemClock.elapsedRealtime() - started
+            if (dispatcher !== owner) throw TeslaError.NotConnected()
             var tried = 0
             var lastError: Throwable? = null
             while (tried < attempts) {
                 tried++
                 try {
+                    if (dispatcher !== owner) throw TeslaError.NotConnected()
+                    stage = "等待会话锁/握手"
+                    val sessionStarted = android.os.SystemClock.elapsedRealtime()
                     ensureSession(UniversalMessage.Domain.DOMAIN_INFOTAINMENT, allowWake = allowWake)
+                    sessionMs += android.os.SystemClock.elapsedRealtime() - sessionStarted
+                    if (dispatcher !== owner) throw TeslaError.NotConnected()
+                    stage = "发送/等待车辆响应"
                     val message = UniversalMessage.RoutableMessage.newBuilder()
                         .setToDestination(
                             UniversalMessage.Destination.newBuilder()
@@ -654,6 +685,19 @@ class VehicleConnection(
             }
             throw finalError
         }
+        } finally {
+            val now = android.os.SystemClock.elapsedRealtime()
+            val elapsed = now - started
+            if (elapsed >= 750 && now - lastSlowReadLogAt >= 10_000) {
+                lastSlowReadLogAt = now
+                com.teslalink.app.debug.DebugLog.log(
+                    "ble-latency", "车机请求耗时=${elapsed}ms 阶段=$stage 排锁=${queueMs}ms 已完成握手=${sessionMs}ms",
+                )
+            }
+        }
+    }
+
+    private var lastSlowReadLogAt = -10_000L
 
     private suspend fun wake(): Unit = withSessionRecovery(UniversalMessage.Domain.DOMAIN_VEHICLE_SECURITY) {
         wakeRaw()
@@ -817,19 +861,37 @@ class VehicleConnection(
         )
     }
 
-    /** Read vehicle data over BLE (wakes infotainment). */
+    /**
+     * Read vehicle data over BLE.
+     * @param telemetry 车速读：**成功拿到帧**即刷新 [lastTelemetryFrameAt]，长请求（唤醒探针）
+     *   据此判断"车速道活着"并立刻让路。用成功而不是发起当判据，是因为驻车时车速道也会按
+     *   ≥1Hz 敲一条睡着的车机——那种排队不该把唯一的唤醒机会挤掉，否则驻车电量永远读不出来。
+     */
     suspend fun vehicleData(
         categories: List<Payloads.Category>,
         attempts: Int = 3,
         timeoutMs: Long = 15_000,
         wake: Boolean = true,
-    ): Vehicle.VehicleData =
-        withSessionRecovery(UniversalMessage.Domain.DOMAIN_INFOTAINMENT) {
-            executeCarServer(
-                Payloads.getVehicleData(categories), attempts, timeoutMs,
-                allowWake = wake,
-            ).vehicleData
+        telemetry: Boolean = false,
+    ): Vehicle.VehicleData {
+        lastVehicleDataRequestAt = android.os.SystemClock.elapsedRealtime()
+        val data = withReadDeadline(timeoutMs) {
+            withSessionRecovery(UniversalMessage.Domain.DOMAIN_INFOTAINMENT) {
+                executeCarServer(
+                    Payloads.getVehicleData(categories), attempts, timeoutMs,
+                    allowWake = wake,
+                ).vehicleData
+            }
         }
+        if (telemetry) lastTelemetryFrameAt = android.os.SystemClock.elapsedRealtime()
+        return data
+    }
+
+    @Volatile private var lastTelemetryFrameAt = -1L
+
+    /** 车速道最近 [windowMs] 内拿到过帧 = 正在用它，长请求该收手。 */
+    fun telemetryLaneActive(windowMs: Long = 8_000): Boolean =
+        android.os.SystemClock.elapsedRealtime() - lastTelemetryFrameAt < windowMs
 
     // ---- Key pairing -------------------------------------------------------
 
@@ -949,6 +1011,8 @@ class VehicleConnection(
         } catch (e: TeslaError.KeyNotPaired) {
             _keyPaired.value = false
             false
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // Polled every 3s during the NFC wait: report the "couldn't tell" case once per link
             // so the log stays readable.
@@ -963,19 +1027,34 @@ class VehicleConnection(
     /** First successful handshake after pairing: prove enrollment, then knock the head unit. */
     private fun onPairingConfirmed() {
         com.teslalink.app.debug.DebugLog.log("vehicle", "车辆已接受这把公钥")
-        scope.launch {
-            auditKeychain()
-            val t0 = System.currentTimeMillis()
+        startSessionInitialization()
+    }
+
+    private fun startSessionInitialization() {
+        sessionInitJob?.cancel()
+        val generation = linkGeneration
+        sessionInitJob = scope.launch {
+            if (_keyPaired.value) {
+                try {
+                    withReadDeadline(2_500) {
+                        ensureSession(UniversalMessage.Domain.DOMAIN_INFOTAINMENT, allowWake = false)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    com.teslalink.app.debug.DebugLog.error("vehicle", "车机域初次握手未完成：${e.message}")
+                }
+            }
+            // 钥匙链检查是一条免鉴权 VCSEC 单帧请求，走 vcsecMutex、不占车机域锁，所以可以
+            // 穿插在车速轮询中间发；只让位给真正独占链路的命令/自检/配对。驻车时车速道按 ≥1Hz
+            // 一直敲，再拿"最近有没有遥测流量"当闸门就永远跑不到了（钥匙链诊断会失去入口）。
+            if (generation != linkGeneration || _exclusive.value) return@launch
             try {
-                ensureSession(UniversalMessage.Domain.DOMAIN_INFOTAINMENT)
-                com.teslalink.app.debug.DebugLog.log(
-                    "vehicle", "车机域会话已建立（${System.currentTimeMillis() - t0}ms）"
-                )
+                withReadDeadline(2_500) { auditKeychain() }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                com.teslalink.app.debug.DebugLog.error(
-                    "vehicle",
-                    "车机域会话未建立（${System.currentTimeMillis() - t0}ms）：${e.message}"
-                )
+                com.teslalink.app.debug.DebugLog.error("keychain", "钥匙链检查未完成：${e.message}")
             }
         }
     }

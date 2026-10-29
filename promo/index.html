@@ -625,7 +625,7 @@ section{padding:96px 0}
 .latency-copy h2{font-size:clamp(28px,3vw,38px);letter-spacing:-.025em;margin-top:14px;font-weight:650}
 .latency-copy p{color:var(--mid);font-size:14.5px;line-height:1.75;margin-top:14px}
 .latency-copy p b{color:var(--hi);font-weight:600}
-.tiny-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:26px}
+.tiny-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:26px}
 .tiny{border:1px solid var(--hairline-soft);border-radius:14px;padding:13px;background:rgba(20,25,32,.5)}
 .tiny b{display:block;font-size:12px;margin-bottom:5px;color:var(--hi)}
 .tiny span{font-size:10.5px;line-height:1.5;color:var(--low);display:block}
@@ -958,7 +958,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <span class="mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="#3E6AE1"/><g transform="translate(12 12.6) scale(0.3) translate(-54 -55)"><path fill="#FFFFFF" d="M54,30 L78,42 L54,54 L30,42 Z"/><path fill="#FFFFFF" d="M38,50 L54,58 L70,50 L70,60 L54,68 L38,60 Z"/><path fill="#FFFFFF" d="M42,66 L54,72 L66,66 L66,74 L54,80 L42,74 Z"/></g></svg>
       </span>
-      T-Dash <small>v0.0.3</small><em class="tag">开源免费的 Tesla 仪表盘 App</em>
+      T-Dash <small>v0.0.4</small><em class="tag">开源免费的 Tesla 仪表盘 App</em>
     </div>
     <nav class="nav-links" aria-label="页面导航">
       <a href="#screens">功能</a>
@@ -988,7 +988,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
           <span class="chip cyan"><i></i>Apache-2.0 开源</span>
         </div>
         <div class="cta">
-          <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.3/T-Dash-0.0.3.apk" target="_blank" rel="noopener noreferrer">下载 APK · v0.0.3 <span aria-hidden="true">↓</span></a>
+          <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.4/T-Dash-0.0.4.apk" target="_blank" rel="noopener noreferrer">下载 APK · v0.0.4 <span aria-hidden="true">↓</span></a>
           <a class="btn btn-ghost" href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">GitHub 仓库</a>
         </div>
         <p class="hero-note">手机在演示一段完整行程：P → D → 加速 → 减速 → P，六项读数同步推进；界面按当前 Compose 排版重绘。</p>
@@ -2389,7 +2389,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
 
                     <div class="coll">
                       <button type="button" class="coll-h" aria-expanded="false">
-                        <div><b>关于与开发者</b><span>v0.0.3 · 开发者模式关</span></div>
+                        <div><b>关于与开发者</b><span>v0.0.4 · 开发者模式关</span></div>
                         <i>▸</i>
                       </button>
                       <div class="coll-b">
@@ -2399,7 +2399,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                         </div>
                         <div class="slabel">关于</div>
                         <div class="panel tight">
-                          <div class="kv"><span>版本</span><b>T-Dash v0.0.3</b></div>
+                          <div class="kv"><span>版本</span><b>T-Dash v0.0.4</b></div>
                           <div class="kv"><span>通道</span><b>蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）</b></div>
                           <div class="kv"><span>云端</span><b>无：无账号登录、无遥测服务器；联网只用于地图底图、定位解析，以及可选的高德天气</b></div>
                           <div class="kv"><span>本机数据</span><b>私钥、轨迹、取证照片与个人信息只存本机</b></div>
@@ -2668,11 +2668,12 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
           <span class="eyebrow">Why it feels instant</span>
           <h2>极致低延迟：<span class="h2-keep">行驶中，只问车一件事。</span></h2>
           <p>一块仪表只有一件要紧事：读数别滞后。行驶全程只发一条高频请求——<b>vehicle_data(DRIVE)</b>；车速、功率、里程、档位都装在同一条响应里，一次拿全。下一轮按上一轮的实测往返 +60 ms 排，<b>最快 250 ms</b> 一刷。</p>
-          <p>充电、空调、车外温度这些驻车数据，行驶中<b>一条都不发</b>；轨迹用手机自己的 GPS，不占蓝牙带宽。所有读数同一时刻只允许一条在飞，慢读排队也拖不住车速。</p>
+          <p>充电、空调、车外温度这些驻车数据，行驶中<b>一条都不发</b>；其余请求一律拆成单类短读，穿插在车速轮询的间隙里，谁也不许占线几十秒。轨迹用手机自己的 GPS，不占蓝牙带宽。挂 D 之后车速轮询就是守护进程——切页面、离开仪表页都不断流，直到落回 P 档才收工。</p>
           <p>锁车、开闭件这类命令走 <b>VCSEC</b>——整车睡着时也能直接应答，不会为了看一眼状态把车叫醒。</p>
           <div class="tiny-cards">
             <div class="tiny"><b>一条高频请求</b><span>DRIVE 单类，不拆成多次往返</span></div>
             <div class="tiny"><b>250–500 ms 自适应</b><span>按上一轮往返 +60 ms 排下一轮</span></div>
+            <div class="tiny"><b>驻车也不掉频</b><span>P 档至少 1 秒一次，车机刚醒立刻追上</span></div>
             <div class="tiny"><b>行驶中零慢请求</b><span>电量、温度只在驻车时读</span></div>
           </div>
         </div>
@@ -2753,10 +2754,10 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       </div>
       <p class="note reveal"><b>成本清单：</b>一台支持蓝牙的安卓手机，其余全免。钥匙是你自己的 NFC 卡，公钥只存在你手机里；项目与 Tesla 无隶属，也不接入任何官方账号体系。</p>
       <div class="cta reveal">
-        <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.3/T-Dash-0.0.3.apk" target="_blank" rel="noopener noreferrer">下载 APK · 0.0.3 <span aria-hidden="true">↓</span></a>
+        <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.4/T-Dash-0.0.4.apk" target="_blank" rel="noopener noreferrer">下载 APK · 0.0.3 <span aria-hidden="true">↓</span></a>
         <a class="btn btn-ghost" href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">GitHub 仓库</a>
       </div>
-      <p class="note reveal"><b>Release：</b><a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.3" target="_blank" rel="noopener noreferrer">github.com/yaoxinxia/T-Dash/releases/tag/v0.0.3</a><br>APK 53 MB · Android 10 及以上 · 需允许安装未知来源应用；正式签名，可从 v0.0.1 / v0.0.2 覆盖升级；与更早的 debug 版不能覆盖，需先卸载。</p>
+      <p class="note reveal"><b>Release：</b><a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.4" target="_blank" rel="noopener noreferrer">github.com/yaoxinxia/T-Dash/releases/tag/v0.0.4</a><br>APK 53 MB · Android 10 及以上 · 需允许安装未知来源应用；正式签名，可从 v0.0.1 / v0.0.2 / v0.0.3 覆盖升级（配对保留）；与更早的 debug 版不能覆盖，需先卸载。</p>
     </section>
   </div>
 
@@ -2855,7 +2856,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
         <span class="mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="#3E6AE1"/><g transform="translate(12 12.6) scale(0.3) translate(-54 -55)"><path fill="#FFFFFF" d="M54,30 L78,42 L54,54 L30,42 Z"/><path fill="#FFFFFF" d="M38,50 L54,58 L70,50 L70,60 L54,68 L38,60 Z"/><path fill="#FFFFFF" d="M42,66 L54,72 L66,66 L66,74 L54,80 L42,74 Z"/></g></svg>
         </span>
-        T-Dash <small>v0.0.3</small>
+        T-Dash <small>v0.0.4</small>
       </div>
       <p style="margin-top:12px">T-Dash 是纯蓝牙的 Tesla 安卓伴侣。协议层来自 teslamotors/vehicle-command 的公开定义，本项目与其无隶属关系，也与 Tesla, Inc. 无关。仅供你本人拥有或有权操作的车辆使用，不得用于未经授权访问他人车辆。</p>
     </div>
@@ -2864,7 +2865,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <b>地图</b> 高德瓦片 · 另可选高德天气<br>
       <b>平台</b> Android · Kotlin / Compose<br>
       <b>GitHub</b> <a href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">yaoxinxia/T-Dash</a><br>
-      <b>Release</b> <a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.3" target="_blank" rel="noopener noreferrer">v0.0.3 · APK</a>
+      <b>Release</b> <a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.4" target="_blank" rel="noopener noreferrer">v0.0.4 · APK</a>
     </div>
   </div>
 </footer>

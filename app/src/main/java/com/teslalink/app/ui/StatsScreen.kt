@@ -93,8 +93,10 @@ fun StatsScreen(dashboard: DashboardViewModel) {
         )
 
         SectionLabel("行驶曲线", "折叠态看数字，点开看全程趋势")
-        MetricSection("车速", speed, TL.accent, " km/h", speedSummary(speed), "大数字在「仪表」页")
-        MetricSection("功率", power, Color(0xFFFF9800), " kW", powerSummary(power), "正为输出，负为回收")
+        // 摘要要对全表 map+average：数据按 1Hz 发布后这是每秒一次的 O(N)，用 remember 挂在数据上，
+        // 其它原因触发的重组（折叠展开、滚动）不再重算。
+        MetricSection("车速", speed, TL.accent, " km/h", remember(speed) { speedSummary(speed) }, "大数字在「仪表」页")
+        MetricSection("功率", power, Color(0xFFFF9800), " kW", remember(power) { powerSummary(power) }, "正为输出，负为回收")
 
         SectionLabel(
             "行驶轨迹",

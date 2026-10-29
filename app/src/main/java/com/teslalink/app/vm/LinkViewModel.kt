@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.teslalink.app.AppContainer
 import com.teslalink.app.vehicle.VehicleConnection
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +19,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** BLE link + command execution + key pairing. */
 class LinkViewModel(private val c: AppContainer) : ViewModel() {
 
-    enum class PairingPhase { IDLE, WAITING_LINK, SENDING, WAITING_CONFIRM, PAIRED, FAILED }
+    enum class PairingPhase {
+        IDLE, WAITING_LINK, SENDING, WAITING_CONFIRM, PAIRED, FAILED;
+
+        val holdsLink: Boolean
+            get() = this == WAITING_LINK || this == SENDING || this == WAITING_CONFIRM
+    }
 
     data class LogEntry(
         val time: Long,
@@ -48,6 +56,8 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
     // ↓↓↓ 必须声明在 init 之前：viewModelScope 用 Main.immediate，init 里启动的收集器
     // 会在属性初始化完成前同步执行，读到未初始化属性就是打开即闪退。 ↓↓↓
     private var reconnectJob: Job? = null
+    private var connectJob: Job? = null
+    private var pairingJob: Job? = null
     private val manualDisconnect = MutableStateFlow(false)
 
     /** True while the app is trying to bring the link back on its own. */
@@ -149,46 +159,45 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
      * 行驶闩由车速道的新鲜数据维护、90s 过期——断链后最多试着恢复 90 秒。
      */
     private fun shouldAutoReconnect(): Boolean =
-        !manualDisconnect.value && vin.value.length == 17 &&
+        prefsLoaded.value && keyPairedEver.value && !manualDisconnect.value &&
+            connectJob?.isActive != true && !pairingHoldsLink() && vin.value.length == 17 &&
             (c.appInForeground.value || c.drivingUntilMs.value > System.currentTimeMillis())
 
-    /** 配对正占着链路：发请求中 / 等链路 / 等刷卡确认，这三段不许自动重连进来抢。 */
-    private fun pairingHoldsLink(): Boolean =
-        pairingJob?.isActive == true && pairingPhase.value in
-            setOf(PairingPhase.WAITING_LINK, PairingPhase.SENDING, PairingPhase.WAITING_CONFIRM)
+    private fun pairingHoldsLink(): Boolean = pairingPhase.value.holdsLink
 
     private fun startAutoReconnect() {
-        // 配对流程持有链路（发请求 + 120 秒轮询），重连每 2-15 秒的整轮
-        // disconnect→扫描会把正在等刷卡的链路冲掉，配对期间一律让路。
-        if (pairingHoldsLink()) return
-        if (reconnectJob?.isActive == true) return
+        if (!shouldAutoReconnect() || reconnectJob?.isActive == true) return
         reconnectJob = viewModelScope.launch {
             autoReconnecting.value = true
             var attempt = 0
-            var logged = false
-            while (isActive &&
-                c.connection.state.value == VehicleConnection.State.DISCONNECTED &&
-                shouldAutoReconnect()
-            ) {
-                attempt++
-                delay(minOf(15_000L, 2_000L * attempt))
-                if (c.connection.state.value != VehicleConnection.State.DISCONNECTED) break
-                val result = runCatching { c.connection.connect(vin.value) }
-                if (result.isFailure && !logged) {
-                    logged = true
-                    // 真实失败原因必须留在日志里（权限缺失/扫描超时/连接满各是不同的处置），
-                    // 固定一句"可能休眠或不在范围"会把他往错的方向带。
-                    val e = result.exceptionOrNull()
-                    appendLog(
-                        "自动重连",
-                        false,
-                        "第 $attempt 次未成功：${e?.message ?: e?.javaClass?.simpleName ?: "未知"}" +
-                            "；车辆可能休眠或不在范围，会持续重试",
-                        0,
-                    )
+            try {
+                while (isActive &&
+                    c.connection.state.value == VehicleConnection.State.DISCONNECTED &&
+                    shouldAutoReconnect()
+                ) {
+                    attempt++
+                    delay(minOf(15_000L, 2_000L * attempt))
+                    if (!shouldAutoReconnect() ||
+                        c.connection.state.value != VehicleConnection.State.DISCONNECTED
+                    ) break
+                    val started = System.currentTimeMillis()
+                    try {
+                        c.connection.connect(vin.value)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        if (attempt == 1 || attempt % 5 == 0) {
+                            appendLog(
+                                "自动重连", false,
+                                "第 $attempt 次未成功：${e.message ?: e.javaClass.simpleName}；稍后重试",
+                                System.currentTimeMillis() - started,
+                            )
+                        }
+                    }
                 }
+            } finally {
+                autoReconnecting.value = false
             }
-            autoReconnecting.value = false
         }
     }
 
@@ -227,7 +236,7 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
             if (cleaned.length == 17) lastCommittedFullVin = cleaned
             if (switched) {
                 // Sessions, the remembered MAC and pairing all belong to the old VIN's car.
-                c.connection.disconnect()
+                disconnect()
                 c.prefs.remove("ble_direct_addr")
                 // 换车 = 这把钥匙对新车还没配对过，重新走引导。
                 keyPairedEver.value = false
@@ -239,22 +248,34 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
         }
     }
 
-    private var connectInFlight = false
-
     fun connect() {
-        if (connectInFlight) return
-        connectInFlight = true
+        if (connectJob != null || c.connection.state.value == VehicleConnection.State.CONNECTING) return
         manualDisconnect.value = false
-        reconnectJob?.cancel()
-        reconnectJob = null
-        autoReconnecting.value = false
-        launchLogged("连接") {
+        val previousReconnect = reconnectJob
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            busy.value = true
+            val started = System.currentTimeMillis()
             try {
+                previousReconnect?.cancelAndJoin()
+                if (c.connection.state.value == VehicleConnection.State.CONNECTED) c.connection.disconnect()
                 c.connection.connect(vin.value)
+                appendLog("连接", true, null, System.currentTimeMillis() - started)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                appendLog("连接", false, e.message, System.currentTimeMillis() - started)
             } finally {
-                connectInFlight = false
+                busy.value = false
             }
         }
+        connectJob = job
+        job.invokeOnCompletion {
+            if (connectJob === job) connectJob = null
+            if (c.connection.state.value == VehicleConnection.State.DISCONNECTED && shouldAutoReconnect()) {
+                startAutoReconnect()
+            }
+        }
+        job.start()
     }
 
     fun setCustomBleName(name: String?) {
@@ -279,27 +300,13 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
     fun disconnect() {
         // 用户意图优先：断开之后自动重连不许再把链路拉起来。
         manualDisconnect.value = true
+        pairingJob?.cancel()
+        connectJob?.cancel()
         reconnectJob?.cancel()
-        reconnectJob = null
         autoReconnecting.value = false
         c.connection.disconnect()
         pairingPhase.value = PairingPhase.IDLE
         pairingAck.value = null
-    }
-
-    private fun launchLogged(label: String, block: suspend () -> Unit) {
-        viewModelScope.launch {
-            busy.value = true
-            val start = System.currentTimeMillis()
-            try {
-                block()
-                appendLog(label, true, null, System.currentTimeMillis() - start)
-            } catch (e: Exception) {
-                appendLog(label, false, e.message, System.currentTimeMillis() - start)
-            } finally {
-                busy.value = false
-            }
-        }
     }
 
     private fun command(label: String, block: suspend () -> VehicleConnection.CommandResult) {
@@ -329,48 +336,49 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
 
     // ---- Pairing -----------------------------------------------------------
 
-    private var pairingJob: Job? = null
-
     fun sendPairingRequest() {
-        // One loop at a time: two 120s polls racing on the same phase/key state produces
-        // confusing results exactly when he can't afford another car trip.
         if (pairingJob?.isActive == true) return
-        pairingJob = viewModelScope.launch {
-            pairingPhase.value = PairingPhase.WAITING_LINK
-            pairingAck.value = null
+        pairingPhase.value = PairingPhase.WAITING_LINK
+        autoReconnecting.value = false
+        pairingJob = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
-                awaitLinkForPairing()
-                pairingPhase.value = PairingPhase.SENDING
-                c.connection.exclusiveAction { c.connection.sendAddKeyRequest() }.also { pairingAck.value = it }
-                pairingPhase.value = PairingPhase.WAITING_CONFIRM
-                val deadline = System.currentTimeMillis() + 120_000
-                while (System.currentTimeMillis() < deadline) {
-                    delay(3_000)
-                    // Each check owns the link while it runs, so the dashboard/status lanes can't
-                    // interleave a handshake of their own and make this answer ambiguous.
-                    val paired = c.connection.exclusiveAction { c.connection.isKeyPaired() }
-                    if (paired) {
-                        pairingPhase.value = PairingPhase.PAIRED
-                        appendLog("钥匙配对", true, null, 0)
-                        return@launch
+                c.connection.exclusiveAction {
+                    pairingAck.value = null
+                    awaitLinkForPairing()
+                    pairingPhase.value = PairingPhase.SENDING
+                    pairingAck.value = c.connection.sendAddKeyRequest()
+                    pairingPhase.value = PairingPhase.WAITING_CONFIRM
+                    val deadline = System.currentTimeMillis() + 120_000
+                    while (System.currentTimeMillis() < deadline) {
+                        delay(3_000)
+                        if (c.connection.state.value != VehicleConnection.State.CONNECTED) {
+                            throw IllegalStateException("配对期间蓝牙已断开，本次配对停止；请重新连接后再试")
+                        }
+                        if (c.connection.isKeyPaired()) {
+                            pairingPhase.value = PairingPhase.PAIRED
+                            appendLog("钥匙配对", true, null, 0)
+                            return@exclusiveAction
+                        }
                     }
+                    pairingPhase.value = PairingPhase.FAILED
+                    pairingAck.value = "2 分钟内没有检测到配对完成，请检查 NFC 刷卡与车机确认结果。"
                 }
-                pairingPhase.value = PairingPhase.FAILED
-                pairingAck.value = "2 分钟内没有检测到配对完成。常见原因：没刷卡、车机上没点确认，或确认时选了非车主权限。"
+            } catch (e: CancellationException) {
+                pairingPhase.value = PairingPhase.IDLE
+                throw e
             } catch (e: Exception) {
                 pairingPhase.value = PairingPhase.FAILED
                 pairingAck.value = e.message ?: e.javaClass.simpleName
                 appendLog("发送配对请求", false, e.message, 0)
             } finally {
-                // 配对期间自动重连被压住；结束时链路若还断着，把它捡回来，
-                // 否则不会再来一次 DISCONNECTED 发射，app 就永远躺平了。
-                if (c.connection.state.value == VehicleConnection.State.DISCONNECTED &&
+                if (isActive && c.connection.state.value == VehicleConnection.State.DISCONNECTED &&
                     shouldAutoReconnect()
                 ) {
                     startAutoReconnect()
                 }
             }
         }
+        pairingJob?.start()
     }
 
     /**
@@ -406,7 +414,10 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
      * surface it instead of pretending the rotation happened.
      */
     suspend fun rotateKey() {
-        c.connection.disconnect()
+        disconnect()
+        connectJob?.join()
+        reconnectJob?.join()
+        pairingJob?.join()
         val pub = c.keyManager.rotateKey()
         // 换钥匙 = 必须重新配对，引导状态清零。
         keyPairedEver.value = false

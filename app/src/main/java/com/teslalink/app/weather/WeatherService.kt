@@ -129,7 +129,7 @@ class WeatherService(private val context: Context, private val prefs: PrefsStore
     }
 
     private fun getJson(url: String): JSONObject? = runCatching {
-        http.newCall(Request.Builder().url(url).header("User-Agent", "T-Dash/0.0.3").build())
+        http.newCall(Request.Builder().url(url).header("User-Agent", "T-Dash/0.0.4").build())
             .execute().use { resp ->
                 val body = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful || body.isBlank()) {

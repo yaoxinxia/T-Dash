@@ -253,6 +253,7 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
                 DriveMiniClock(
                     weather,
                     visible = !parked,
+                    compact = !landscape,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(top = 12.dp, end = if (landscape) 18.dp else 14.dp),
@@ -703,6 +704,7 @@ private fun ClusterRing(
 private fun DriveMiniClock(
     weather: com.teslalink.app.weather.WeatherNow?,
     visible: Boolean,
+    compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val alpha by animateFloatAsState(
@@ -720,14 +722,23 @@ private fun DriveMiniClock(
         }
     }
     val cal = Calendar.getInstance().apply { timeInMillis = nowMs }
-    Column(
-        modifier.alpha(alpha),
-        horizontalAlignment = Alignment.End,
+    // 他点名"行驶里时间/天气太小"。原来右上一列 16sp/10.5sp 的灰字压不住行车画面；
+    // 改成横向胶囊：时间升到 22/26sp（tnum 不跳宽），天气 12.5/14sp 用中灰而不是低灰，
+    // 半透明底 + 细边让它压在轨迹/天空上依然可读。竖屏紧凑一号，避免吃掉速度环。
+    Row(
+        modifier
+            .alpha(alpha)
+            .clip(CircleShape)
+            .background(TL.raised.copy(alpha = 0.6f))
+            .border(1.dp, TL.hairlineSoft, CircleShape)
+            .padding(horizontal = if (compact) 10.dp else 12.dp, vertical = if (compact) 5.dp else 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
     ) {
         Text(
             "%02d:%02d".format(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE)),
             style = TextStyle(
-                fontSize = 16.sp,
+                fontSize = if (compact) 22.sp else 26.sp,
                 fontWeight = FontWeight.W700,
                 letterSpacing = 0.6.sp,
                 fontFeatureSettings = "tnum",
@@ -735,13 +746,18 @@ private fun DriveMiniClock(
             ),
         )
         weather?.let { w ->
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(if (compact) 16.dp else 20.dp)
+                    .background(TL.hairlineSoft),
+            )
             Text(
                 "${w.text} ${w.tempC}°",
-                fontSize = 10.5.sp,
+                fontSize = if (compact) 12.5.sp else 14.sp,
                 letterSpacing = 0.4.sp,
-                color = TL.textLow,
+                color = TL.textMid,
                 maxLines = 1,
-                modifier = Modifier.padding(top = 2.dp),
             )
         }
     }
@@ -1121,52 +1137,111 @@ private fun RouteArea(pts: List<com.teslalink.app.vm.TripPoint>, modifier: Modif
 
 /**
  * 本次路线形状：正北朝上、**两轴同一比例尺**（不旋转、不带罗盘针——朝向交给旁边的八方位文字，
- * 一个没有指北参照的旋转图反而读不懂）。起点灰点、当前蓝点。
+ * 一个没有指北参照的旋转图反而读不懂）。起点空心环、当前点实心核+水波涟漪。
  *
  * 先换算成米再等比缩放：原来两轴各自把"同一个度数跨度"铺满自己的边长，横屏那个扁盒子
  * 就等于把南北方向压掉三四倍，路线看着被压瘪；而且一度经线的实际长度随纬度收缩，
  * 杭州大约是纬线的 0.86 倍，不按 cos(lat) 修正连形状都是错的。
+ *
+ * 投影在 remember 里算一次（键=点数/末点时间），像素换算留在各自 Canvas：涟漪层每帧重绘时
+ * 不会连路线 Path 一起重建——小盒子上 60fps 重建 160 段 Path 是纯浪费。
  */
 @Composable
 private fun RouteShape(pts: List<com.teslalink.app.vm.TripPoint>, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
+    val geo = rememberRouteGeometry(pts) ?: return
+    Box(modifier) {
+        Canvas(Modifier.matchParentSize()) {
+            val k = minOf((size.width - 2 * geo.pad.toPx()) / geo.spanE, (size.height - 2 * geo.pad.toPx()) / geo.spanN).toFloat()
+            val path = Path()
+            for (i in 0 until geo.count) {
+                val x = size.width / 2 + geo.u(i) * k
+                val y = size.height / 2 - geo.v(i) * k
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            // 辉光垫底 + 主线，路线小图也保持和统计页地图同一套视觉语言。
+            drawPath(
+                path,
+                TL.accent.copy(alpha = 0.22f),
+                style = Stroke(width = 7.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
+            )
+            drawPath(
+                path,
+                TL.accent,
+                style = Stroke(width = 2.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
+            )
+            // 起点：空心环——跟实心的当前点一眼可分，不用图例也知道哪头是出发。
+            val s = androidx.compose.ui.geometry.Offset(size.width / 2 + geo.startU * k, size.height / 2 - geo.startV * k)
+            drawCircle(TL.raised, radius = 3.5.dp.toPx(), center = s)
+            drawCircle(
+                TL.textMid.copy(alpha = 0.95f),
+                radius = 3.5f.dp.toPx(),
+                center = s,
+                style = Stroke(width = 1.6.dp.toPx()),
+            )
+            // 当前点：亮描边 + 实心核（涟漪在下层 overlay 的独立 Canvas 里动）。
+            val c = androidx.compose.ui.geometry.Offset(size.width / 2 + geo.curU * k, size.height / 2 - geo.curV * k)
+            drawCircle(TL.textHi.copy(alpha = 0.9f), radius = 5.dp.toPx(), center = c)
+            drawCircle(TL.accent, radius = 3.2.dp.toPx(), center = c)
+        }
+        RouteRipple(geo, Modifier.matchParentSize())
+    }
+}
+
+/** 投影结果：以包围盒中心为原点的米制偏移。写进 remember，静态层与涟漪层共用。 */
+private class RouteGeometry(val raw: FloatArray, val spanE: Double, val spanN: Double, val pad: androidx.compose.ui.unit.Dp) {
+    val count: Int get() = raw.size / 2
+    fun u(i: Int) = raw[i * 2]
+    fun v(i: Int) = raw[i * 2 + 1]
+    val startU: Float get() = raw[0]
+    val startV: Float get() = raw[1]
+    val curU: Float get() = raw[raw.size - 2]
+    val curV: Float get() = raw[raw.size - 1]
+}
+
+@Composable
+private fun rememberRouteGeometry(pts: List<com.teslalink.app.vm.TripPoint>): RouteGeometry? =
+    remember(pts.size, pts.lastOrNull()?.t, pts.firstOrNull()?.t) {
+        if (pts.size < 2) return@remember null
         val step = maxOf(1, pts.size / 160)
         val picked = pts.filterIndexed { i, _ -> i % step == 0 || i == pts.size - 1 }
         val minLat = picked.minOf { it.lat }
         val maxLat = picked.maxOf { it.lat }
         val minLng = picked.minOf { it.lng }
         val maxLng = picked.maxOf { it.lng }
-        val midLat = (minLat + maxLat) / 2
         val mPerDegLat = 111_320.0
-        val mPerDegLng = 111_320.0 * Math.cos(Math.toRadians(midLat))
+        val mPerDegLng = 111_320.0 * Math.cos(Math.toRadians((minLat + maxLat) / 2))
         val spanE = ((maxLng - minLng) * mPerDegLng).coerceAtLeast(1.0)
         val spanN = ((maxLat - minLat) * mPerDegLat).coerceAtLeast(1.0)
-        val pad = 6.dp.toPx()
-        // 一个比例尺（像素/米）同时套在两轴上：装不下的那个方向留白，形不能被拉。
-        val k = minOf((size.width - 2 * pad) / spanE, (size.height - 2 * pad) / spanN).toFloat()
-        val cxMid = size.width / 2
-        val cyMid = size.height / 2
         val midLng = (minLng + maxLng) / 2
-        fun cx(lng: Double) = cxMid + ((lng - midLng) * mPerDegLng).toFloat() * k
-        fun cy(lat: Double) = cyMid - ((lat - midLat) * mPerDegLat).toFloat() * k
-
-        val path = Path()
+        val midLat = (minLat + maxLat) / 2
+        val raw = FloatArray(picked.size * 2)
         picked.forEachIndexed { i, p ->
-            if (i == 0) path.moveTo(cx(p.lng), cy(p.lat)) else path.lineTo(cx(p.lng), cy(p.lat))
+            raw[i * 2] = ((p.lng - midLng) * mPerDegLng).toFloat()
+            raw[i * 2 + 1] = ((p.lat - midLat) * mPerDegLat).toFloat()
         }
-        // 辉光垫底 + 主线，路线小图也保持和统计页地图同一套视觉语言。
-        drawPath(
-            path,
-            TL.accent.copy(alpha = 0.22f),
-            style = Stroke(width = 7.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
-        )
-        drawPath(
-            path,
-            TL.accent,
-            style = Stroke(width = 2.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
-        )
-        drawCircle(TL.textMid.copy(alpha = 0.85f), radius = 2.5.dp.toPx(), center = androidx.compose.ui.geometry.Offset(cx(picked.first().lng), cy(picked.first().lat)))
-        drawCircle(TL.accent, radius = 3.5.dp.toPx(), center = androidx.compose.ui.geometry.Offset(cx(picked.last().lng), cy(picked.last().lat)))
+        RouteGeometry(raw, spanE, spanN, 6.dp)
+    }
+
+/** 当前点的水波涟漪：两圈错相位扩散（1.6s 一轮），单独一层 Canvas，静态路线不跟着重绘。 */
+@Composable
+private fun RouteRipple(geo: RouteGeometry, modifier: Modifier = Modifier) {
+    val phase = rememberInfiniteTransition(label = "route-ripple").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1_600, easing = androidx.compose.animation.core.LinearEasing)),
+        label = "route-ripple-phase",
+    )
+    Canvas(modifier) {
+        val k = minOf((size.width - 2 * geo.pad.toPx()) / geo.spanE, (size.height - 2 * geo.pad.toPx()) / geo.spanN).toFloat()
+        val c = androidx.compose.ui.geometry.Offset(size.width / 2 + geo.curU * k, size.height / 2 - geo.curV * k)
+        for (offset in listOf(0f, 0.5f)) {
+            val t = (phase.value + offset) % 1f
+            drawCircle(
+                TL.accent.copy(alpha = 0.42f * (1f - t)),
+                radius = (4.dp.toPx() + t * 11.dp.toPx()),
+                center = c,
+            )
+        }
     }
 }
 

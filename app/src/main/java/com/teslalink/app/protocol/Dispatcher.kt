@@ -81,6 +81,7 @@ class Dispatcher(
     fun stop() {
         listenJob?.cancel()
         listenJob = null
+        handlers.values.forEach { it.channel.close(TeslaError.NotConnected()) }
         handlers.clear()
     }
 
@@ -203,7 +204,7 @@ class Dispatcher(
         try {
             transport.send(builder.build().toByteArray())
         } catch (e: Throwable) {
-            handlers.remove(key)
+            closeHandler(handler)
             throw e
         }
         return handler

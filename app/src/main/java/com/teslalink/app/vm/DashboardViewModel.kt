@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tesla.generated.carserver.vehicle.Vehicle
 import com.teslalink.app.AppContainer
+import com.teslalink.app.debug.DebugLog
 import com.teslalink.app.vehicle.Payloads
 import com.teslalink.app.vehicle.VehicleConnection
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -19,6 +21,121 @@ import kotlinx.coroutines.launch
 
 private const val WEATHER_REFRESH_MS = 30 * 60_000L
 private const val WEATHER_RETRY_MS = 10 * 60_000L
+
+internal data class DriveSample(val speedKmh: Float? = null, val shift: String? = null)
+
+/** Only fields actually present in this response count as new evidence. */
+internal fun parseDriveSample(data: Vehicle.VehicleData?): DriveSample {
+    if (data == null || !data.hasDriveState()) return DriveSample()
+    val drive = data.driveState
+    return DriveSample(
+        speedKmh = when {
+            drive.hasSpeedFloat() -> drive.speedFloat * 1.609344f
+            drive.hasSpeed() -> drive.speed * 1.609344f
+            else -> null
+        }?.takeIf { it.isFinite() },
+        shift = when (drive.shiftState.typeCase) {
+            Vehicle.ShiftState.TypeCase.P -> "P"
+            Vehicle.ShiftState.TypeCase.R -> "R"
+            Vehicle.ShiftState.TypeCase.N -> "N"
+            Vehicle.ShiftState.TypeCase.D -> "D"
+            else -> null
+        },
+    )
+}
+
+internal fun readingIsFresh(at: Long?, now: Long, maxAgeMs: Long = 5_000L): Boolean =
+    at != null && now - at in 0 until maxAgeMs
+
+/** Field-specific clocks: a speed-only frame cannot freshen an old P (or D). */
+internal data class DriveReadings(
+    val speedKmh: Float? = null,
+    val shift: String? = null,
+    val speedAtMs: Long? = null,
+    val shiftAtMs: Long? = null,
+) {
+    fun updated(sample: DriveSample, now: Long): DriveReadings = copy(
+        speedKmh = sample.speedKmh ?: speedKmh,
+        shift = sample.shift ?: shift,
+        speedAtMs = if (sample.speedKmh != null) now else speedAtMs,
+        shiftAtMs = if (sample.shift != null) now else shiftAtMs,
+    )
+
+    fun moving(now: Long, maxAgeMs: Long = 5_000L): Boolean =
+        (readingIsFresh(speedAtMs, now, maxAgeMs) && kotlin.math.abs(speedKmh ?: 0f) > 0.5f) ||
+            (readingIsFresh(shiftAtMs, now, maxAgeMs) && (shift == "D" || shift == "R"))
+
+    fun allowsSlowRead(now: Long, drivingUntilMs: Long): Boolean =
+        drivingUntilMs <= now && readingIsFresh(speedAtMs, now) && readingIsFresh(shiftAtMs, now) &&
+            speedKmh != null && kotlin.math.abs(speedKmh) <= 0.5f && (shift == "P" || shift == "N")
+}
+
+internal fun nextDrivingUntil(previous: Long, sample: DriveSample, now: Long): Long = when {
+    kotlin.math.abs(sample.speedKmh ?: 0f) > 0.5f || sample.shift == "D" || sample.shift == "R" -> now + 90_000L
+    // Clear only on an explicit low-speed P/N frame, never on a carried-over UI value.
+    sample.speedKmh != null && kotlin.math.abs(sample.speedKmh) <= 0.5f &&
+        (sample.shift == "P" || sample.shift == "N") -> 0L
+    else -> previous
+}
+
+internal fun applyDashboardDrive(
+    previous: DashboardViewModel.ClusterState,
+    data: Vehicle.VehicleData?,
+    now: Long,
+): DashboardViewModel.ClusterState {
+    if (data == null || !data.hasDriveState()) return previous
+    val drive = data.driveState
+    val sample = parseDriveSample(data)
+    return previous.copy(
+        speedKmh = sample.speedKmh ?: previous.speedKmh,
+        shift = sample.shift ?: previous.shift,
+        powerKw = if (drive.hasPower()) drive.power else previous.powerKw,
+        odometerKm = if (drive.hasOdometerInHundredthsOfAMile()) {
+            drive.odometerInHundredthsOfAMile * 0.0160934f
+        } else previous.odometerKm,
+        odometerHm = if (drive.hasOdometerInHundredthsOfAMile()) {
+            drive.odometerInHundredthsOfAMile
+        } else previous.odometerHm,
+        // The cluster's stale indicator represents speed, not an unrelated power/shift update.
+        updatedAtMs = if (sample.speedKmh != null) now else previous.updatedAtMs,
+    )
+}
+
+/**
+ * 车速道节奏。行驶：跟着真实往返走（下限 250ms，一次 250ms 的读排在别人的响应后面会直接翻倍）。
+ * 驻车/证据还没有：**固定 600ms，保证至少 1 秒一次**，而且不看车机会不会答——
+ * 链路是不是刚活过来只有敲一次才知道，等到 5 秒就是"起步后头几秒没有速度"。
+ */
+internal fun fastLaneInterval(moving: Boolean, lastRttMs: Long, parkedMs: Long = 600L): Long =
+    if (moving) (lastRttMs + 60L).coerceIn(250L, 500L) else parkedMs
+
+/**
+ * 一次 vehicleData 的总预算（排锁+握手+响应一起算，见 VehicleConnection.withReadDeadline）。
+ * 驻车必须 ≤1000ms：车机睡着时这条读会一直挂到超时，预算就是实际节奏——2.5s 的预算等于
+ * 0.4Hz，直接违背"P 档至少 1 秒一次"。行驶留 2.5s 是为了偶尔一次慢往返别把闩打断。
+ */
+internal fun fastLaneBudgetMs(moving: Boolean): Long = if (moving) 2_500L else 1_000L
+
+/**
+ * 仪表慢道（CHARGE/CLIMATE）的单类原子读预算。**必须小于驻车车速读的 1 秒**，
+ * 否则一次慢类读就能把 1Hz 节奏挤掉一轮；车机醒着时这两类普遍 200–400ms 回完。
+ */
+internal const val SLOW_READ_BUDGET_MS = 700L
+
+/** Failure and slow-success logs have separate, per-category 10s throttles. */
+internal class TelemetryReadLog(private val tag: String) {
+    private val lastAt = mutableMapOf<String, Long>()
+
+    fun record(category: String, started: Long, failure: String? = null) {
+        val now = System.currentTimeMillis()
+        val elapsed = now - started
+        val outcome = if (failure != null) "失败" else if (elapsed >= 800L) "慢请求" else return
+        val key = "$category/$outcome"
+        if (lastAt[key]?.let { now - it < 10_000L } == true) return
+        lastAt[key] = now
+        DebugLog.log(tag, "$category $outcome ${elapsed}ms${failure?.let { "：$it" }.orEmpty()}")
+    }
+}
 
 /**
  * Feeds the instrument cluster over BLE with two polling lanes:
@@ -98,6 +215,7 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
 
     val accelRun = MutableStateFlow<AccelRun?>(null)
     val accelResults = MutableStateFlow<List<AccelResult>>(emptyList())
+    private var pendingAccelSocResult: AccelResult? = null
 
     /** 超时/作废原因：必须就地显示在工具页（旧实现静默把按钮跳回"开始"，他不知道为什么）。 */
     val accelNote = MutableStateFlow<String?>(null)
@@ -107,14 +225,31 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
 
     fun armAccel() {
         lastAccelSpeed = cluster.value.speedKmh
-        lastAccelTick = System.currentTimeMillis()
+        // Arming is not a speed sample: do not stamp a frozen UI value as fresh.
+        lastAccelTick = driveReadings.speedAtMs ?: 0L
         accelNote.value = null
-        accelRun.value = AccelRun(armedAt = lastAccelTick)
+        accelRun.value = AccelRun(armedAt = System.currentTimeMillis())
     }
 
     fun cancelAccel() {
         accelRun.value = null
         accelNote.value = null
+    }
+
+    /** Timeouts still run when DRIVE is missing, without inventing a speed sample. */
+    private fun expireAccel(now: Long) {
+        val run = accelRun.value ?: return
+        val note = when {
+            run.t0Ms == null && now - run.armedAt > 120_000L ->
+                "已自动作废：待命 120 秒没有起步（车速没过 0.5 km/h）。再点一次「开始零百测试」重新待命。"
+            run.t0Ms != null && now - run.t0Ms > 60_000L ->
+                "已自动作废：起步后 60 秒没有跑到 100 km/h（车速流中断或场地不够长）。"
+            else -> null
+        }
+        if (note != null) {
+            accelRun.value = null
+            accelNote.value = note
+        }
     }
 
     /**
@@ -142,13 +277,7 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
 
         if (run.t0Ms == null) {
             val t0 = cross(0.5f)
-            when {
-                t0 != null -> accelRun.value = run.copy(t0Ms = t0, socStart = cluster.value.soc)
-                now - run.armedAt > 120_000 -> {
-                    accelRun.value = null
-                    accelNote.value = "已自动作废：待命 120 秒没有起步（车速没过 0.5 km/h）。再点一次「开始零百测试」重新待命。"
-                }
-            }
+            if (t0 != null) accelRun.value = run.copy(t0Ms = t0, socStart = cluster.value.soc)
             return
         }
         val t0 = run.t0Ms
@@ -163,27 +292,13 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
                 t60To100Ms = updated.t60Ms?.let { t100 - it },
                 maxPowerKw = updated.maxPowerKw,
                 socStart = updated.socStart,
-                socEnd = cluster.value.soc,
+                socEnd = null,
             )
             accelResults.value = (listOf(result) + accelResults.value).take(20)
             accelRun.value = null
-            // 行驶中慢道已经彻底静默，cluster.soc 还是出发前的值——终点电量要在这条跑完的
-            // 此刻单独补一次 quick 读（一次性，测试已经结束），否则"耗电"永远是 0。
-            viewModelScope.launch {
-                val data = readVehicleData(listOf(Payloads.Category.CHARGE), quick = true)
-                if (data == null) return@launch
-                applyCharge(data)
-                val end = cluster.value.soc
-                accelResults.update { list ->
-                    if (list.isEmpty() || list.first() !== result) list
-                    else list.mapIndexed { i, r -> if (i == 0) r.copy(socEnd = end) else r }
-                }
-            }
-            return
-        }
-        if (now - t0 > 60_000) {
-            accelRun.value = null
-            accelNote.value = "已自动作废：起步后 60 秒没有跑到 100 km/h（车速流中断或场地不够长）。"
+            // 100 km/h 时也不能插入 CHARGE。终点 SOC 留空，明确驻车后的首个电量读数再补，
+            // 而不是拿出发前的缓存伪装成终点读数；连续测试只补最近一条。
+            pendingAccelSocResult = result
             return
         }
         accelRun.value = updated
@@ -206,9 +321,22 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
 
     private var lastMovingAt = 0L
 
-    private fun append(buffer: MutableStateFlow<List<Point>>, point: Point) {
+    /** 内部缓冲：250ms 节奏只写 ArrayList（O(1) 摊还），快照按 1Hz 发给统计页。 */
+    private val speedSeries = ArrayList<Point>(4096)
+    private val powerSeries = ArrayList<Point>(4096)
+    private var lastSeriesPublishMs = 0L
+
+    private fun recordSeries(series: ArrayList<Point>, point: Point, now: Long) {
         // 本次启动内全量保留（他 2026-10-13 要求）；渲染侧在 LineChart 里抽稀，数据不丢。
-        buffer.update { it + point }
+        series.add(point)
+    }
+
+    /** 统计页只读快照：整表复制的成本按 1Hz 付，而不是 4Hz——行程越长它越是卡顿放大器。 */
+    private fun publishSeries(now: Long) {
+        if (now - lastSeriesPublishMs < 1_000) return
+        lastSeriesPublishMs = now
+        speed.value = speedSeries.toList()
+        power.value = powerSeries.toList()
     }
 
     /**
@@ -243,48 +371,56 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
             c.connection.state.collect { state ->
                 if (state == VehicleConnection.State.DISCONNECTED) {
                     cluster.value = ClusterState()
+                    driveReadings = DriveReadings()
+                    pendingAccelSocResult = null
+                    c.vehicleMoving.value = false
                 }
             }
         }
     }
 
-    @Volatile private var vehicleReadInFlight = false
+    private var driveReadings = DriveReadings()
+    @Volatile private var driveReadInFlight = false
+    @Volatile private var slowReadInFlight = false
+    private val readLog = TelemetryReadLog("dashboard-read")
+
+    private fun canReadParked(): Boolean = pollable() && !c.vehicleMoving.value &&
+        driveReadings.allowsSlowRead(System.currentTimeMillis(), c.drivingUntilMs.value)
 
     /**
-     * One vehicle-data read at a time. An infotainment attempt can take tens of seconds
-     * (handshake + wake + retry); without this guard the 250 ms lane would pile an unbounded
-     * queue onto that mutex and the app looks hung while "仪表" shows 等待数据.
-     *
-     * quick=true 给车速道用：单次尝试、2.5s 超时。infotainmentMutex 串行一切车机域对话，
-     * 慢路径的 15s×3 重试一旦排在它前面，车速就得等十几秒——快速读失败下一轮 250ms 再来。
+     * Each lane has at most one pending read, and every read is **one category** (an atomic
+     * request): a multi-category reply exceeds the negotiated MTU, and long requests are what
+     * used to starve the speed lane. Recheck parking at dispatch so auxiliary SOC reads cannot
+     * bypass the slow-lane gate; the drive budget is what enforces "≥1 poll per second in P".
      */
-    private suspend fun readVehicleData(
-        categories: List<Payloads.Category>,
-        quick: Boolean = false,
-        attempts: Int? = null,
-        wake: Boolean = true,
-    ): Vehicle.VehicleData? {
-        if (vehicleReadInFlight) return null
-        vehicleReadInFlight = true
+    private suspend fun readVehicleData(category: Payloads.Category): Vehicle.VehicleData? {
+        val drive = category == Payloads.Category.DRIVE
+        if (drive) {
+            if (driveReadInFlight) return null
+            driveReadInFlight = true
+        } else {
+            if (slowReadInFlight || !canReadParked()) return null
+            slowReadInFlight = true
+        }
+        val budgetMs = if (drive) {
+            fastLaneBudgetMs(driveReadings.moving(System.currentTimeMillis()))
+        } else {
+            SLOW_READ_BUDGET_MS
+        }
+        val started = System.currentTimeMillis()
         return try {
-            if (quick) {
-                c.connection.vehicleData(
-                    categories,
-                    attempts = attempts ?: 1,
-                    timeoutMs = 2_500,
-                    wake = wake,
-                )
-            } else {
-                c.connection.vehicleData(
-                    categories,
-                    attempts = attempts ?: 3,
-                    wake = wake,
-                )
-            }
+            c.connection.vehicleData(
+                listOf(category), attempts = 1, timeoutMs = budgetMs, wake = false,
+                // 车速道拿到过帧 = 正在用它，唤醒探针据此收手（车速新鲜度压倒一切）。
+                telemetry = drive,
+            ).also { readLog.record(category.name, started) }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
+            readLog.record(category.name, started, "${e.javaClass.simpleName}: ${e.message}")
             null
         } finally {
-            vehicleReadInFlight = false
+            if (drive) driveReadInFlight = false else slowReadInFlight = false
         }
     }
 
@@ -296,12 +432,35 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
 
     fun startBlePolling() {
         if (++pollingRefs > 1) return
-        // 车道自己抛异常时整条重启，而不是让协程把进程带走（见 laneTick）。
-        fastJob = viewModelScope.launch { while (currentCoroutineContext().isActive) laneTick("车速", ::fastLane) }
-        slowJob = viewModelScope.launch { while (currentCoroutineContext().isActive) laneTick("驻车读数", ::slowLane) }
-        locationJob = viewModelScope.launch { while (currentCoroutineContext().isActive) laneTick("轨迹", ::locationLane) }
+        ensureLanes()
         // 朝向格的兜底罗盘跟页面走：仪表/统计可见时才采样，离开即注销。
         startHeadingSensor()
+    }
+
+    /**
+     * 车道的生死判据：有页面要（引用计数）**或行驶闩还热**。这就是"行驶中的 vehicle 轮询是
+     * 守护进程"的落点：D 档下切任何页面、甚至停在别的页，车速道照常跑，直到 P/N 让闩过期
+     * 才自然收工。车道退出走"本轮跑完、下一轮条件不满足"，**从不 cancel()**——行驶中一条
+     * in-flight 的 vehicleData 若被取消在 BleTransport.send 的写入窗口里，withGattCleanup
+     * 会把整条 GATT 退役（表现正是"切页后蓝牙断联几秒又自动重连"）。
+     */
+    private fun lanesWanted(): Boolean =
+        pollingRefs > 0 || c.drivingUntilMs.value > System.currentTimeMillis()
+
+    private fun ensureLanes() {
+        if (fastJob?.isActive == true) return
+        // 车道自己抛异常时整条重启，而不是让协程把进程带走（见 laneTick）。
+        fastJob = viewModelScope.launch { while (lanesWanted()) laneTick("车速", ::fastLane) }
+        slowJob = viewModelScope.launch { while (lanesWanted()) laneTick("驻车读数", ::slowLane) }
+        locationJob = viewModelScope.launch { while (lanesWanted()) laneTick("轨迹", ::locationLane) }
+    }
+
+    fun stopBlePolling() {
+        if (pollingRefs > 0) pollingRefs--
+        if (pollingRefs > 0) return
+        // 故意不 cancel：车道在本轮结束后自查 lanesWanted()（行驶闩热着就继续跑）。
+        // GPS 由 locationLane 自己启停（行驶闩热时轨迹照样记），这里不再动它。
+        stopHeadingSensor()
     }
 
     /**
@@ -325,86 +484,43 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
     private var lastFastRtt = 0L
 
     /**
-     * Fast lane: DRIVE-only. Target cadence is measured from tick start, and follows the real
+     * Fast lane: DRIVE-only. Target cadence is measured from tick start and follows the real
      * round trip while moving（下限 250 ms）：一次 250 ms 的读排在别人的响应后面会直接翻倍。
+     * 驻车（P/N 或证据还没有）**也必须至少 1 秒一次**：车机睡着时照样按节奏发——链路是不是
+     * 刚活过来，只有车速道自己问一次才知道，等 5 秒就是"起步后前几秒没有速度"。
      */
     private suspend fun fastLane() {
         while (currentCoroutineContext().isActive) {
             val tickStarted = System.currentTimeMillis()
-            val interval = when {
-                // Head unit not reachable yet: probe slowly instead of flooding a broken link.
-                !c.connection.mcuSessionReady.value -> 5_000L
-                cluster.value.speedKmh > 0.5f -> (lastFastRtt + 60L).coerceIn(250L, 500L)
-                else -> 600L
-            }
+            val interval = fastLaneInterval(driveReadings.moving(tickStarted), lastFastRtt)
             if (pollable()) {
                 val started = System.currentTimeMillis()
                 // 车速道禁 wake（wake=false）：车机睡着时"唤醒+30s 重试"会持锁冻死 250ms 节奏，
                 // 宁可这轮失败下一轮再来。行驶信号要带新鲜度（见下），车机睡着会自动熄灭。
-                val data = readVehicleData(listOf(Payloads.Category.DRIVE), quick = true, wake = false)
-                if (data != null) lastFastRtt = System.currentTimeMillis() - started
-                // 行驶信号唯一直接来源：其他页（VCSEC 轮询、轨迹）据此决定行驶中停不停。
-                // **必须看数据新鲜度**：车机睡着/读持续失败时 cluster 速度冻在最后值，
-                // 不加门限会让"行驶中"永久卡死——控制页驻车闸门全禁用、慢车道永不恢复。
-                // 阈值 5s > 行驶中正常读间隔（≤2.5s），不会在正常行驶时闪烁。
-                val fresh = System.currentTimeMillis() - cluster.value.updatedAtMs < 5_000L
-                c.vehicleMoving.value = fresh && cluster.value.speedKmh > 2f
-                // 行驶闩（D/R 息屏/后台继续监听的依据）也只认新鲜数据：
-                // D/R 或在动 → 续 90s；明确读到 P/N → 立即清零。读失败不动它，靠 90s 过期兜底。
-                if (data != null) {
-                    val shift = cluster.value.shift
-                    if (cluster.value.speedKmh > 2f || shift == "D" || shift == "R") {
-                        c.drivingUntilMs.value = System.currentTimeMillis() + 90_000L
-                    } else if (shift == "P" || shift == "N") {
-                        c.drivingUntilMs.value = 0L
-                    }
+                val data = readVehicleData(Payloads.Category.DRIVE)
+                val now = System.currentTimeMillis()
+                if (data != null) lastFastRtt = now - started
+                val sample = parseDriveSample(data)
+                if (data != null && sample.speedKmh == null && sample.shift == null) {
+                    readLog.record("DRIVE", started, "响应缺少有效速度/档位，保留旧值但不续新鲜度")
                 }
-                if (accelRun.value != null) evaluateAccel(System.currentTimeMillis(), cluster.value.speedKmh)
-                if (data != null) {
-                    val now = System.currentTimeMillis()
-                    if (data.hasDriveState()) {
-                        val drive = data.driveState
-                        cluster.update { snap ->
-                            var s = snap
-                            // speedFloat 是精确值；speed 是整数 mph（向下取整）。两个字段可能同时在，
-                            // 必须优先用 float——"先 floor 再 ceil" 会丢掉最多 1.6 km/h，正好差 1。
-                            if (drive.hasSpeedFloat()) {
-                                val kmh = drive.speedFloat * 1.609344f
-                                s = s.copy(speedKmh = kmh)
-                                append(speed, Point(now, kmh))
-                            } else if (drive.hasSpeed()) {
-                                val kmh = drive.speed * 1.609344f
-                                s = s.copy(speedKmh = kmh)
-                                append(speed, Point(now, kmh))
-                            }
-                            if (drive.hasPower()) {
-                                s = s.copy(powerKw = drive.power)
-                                append(power, Point(now, drive.power.toFloat()))
-                            }
-                            if (drive.hasShiftState()) {
-                                s = s.copy(
-                                    shift = when (drive.shiftState.typeCase) {
-                                        Vehicle.ShiftState.TypeCase.P -> "P"
-                                        Vehicle.ShiftState.TypeCase.R -> "R"
-                                        Vehicle.ShiftState.TypeCase.N -> "N"
-                                        Vehicle.ShiftState.TypeCase.D -> "D"
-                                        else -> s.shift
-                                    }
-                                )
-                            }
-                            if (drive.hasOdometerInHundredthsOfAMile()) {
-                                val hm = drive.odometerInHundredthsOfAMile
-                                s = s.copy(
-                                    odometerKm = hm * 0.0160934f,
-                                    odometerHm = hm,
-                                )
-                            }
-                            s.copy(updatedAtMs = now)
-                        }
-                    }
-                    // 本次最高车速按 250ms 全采样记，不按 10s 的 GPS 点算（后者会明显偏低）。
-                    c.trips.onSpeed(cluster.value.speedKmh)
+                // Publish the new frame BEFORE the latch, acceleration crossings and trip maximum.
+                // Empty/non-DRIVE replies retain the UI but renew neither field's evidence clock.
+                cluster.update { applyDashboardDrive(it, data, now) }
+                driveReadings = driveReadings.updated(sample, now)
+                c.drivingUntilMs.value = nextDrivingUntil(c.drivingUntilMs.value, sample, now)
+                c.vehicleMoving.value = readingIsFresh(driveReadings.speedAtMs, now) &&
+                    kotlin.math.abs(driveReadings.speedKmh ?: 0f) > 2f
+                expireAccel(now)
+                sample.speedKmh?.let { kmh ->
+                    recordSeries(speedSeries, Point(now, kmh), now)
+                    if (accelRun.value != null) evaluateAccel(now, kmh)
+                    c.trips.onSpeed(kmh)
                 }
+                if (data?.hasDriveState() == true && data.driveState.hasPower()) {
+                    recordSeries(powerSeries, Point(now, data.driveState.power.toFloat()), now)
+                }
+                publishSeries(now)
             }
             // Pace from tick start: a ~200 ms round trip inside a 250 ms cadence must not turn
             // the speedometer into a 2 Hz one.
@@ -425,14 +541,12 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
      */
     private suspend fun slowLane() {
         while (currentCoroutineContext().isActive) {
-            if (pollable() && cluster.value.speedKmh <= 0.5f) {
+            if (canReadParked()) {
                 val mcuReady = c.connection.mcuSessionReady.value
-                // 探测模式（车机不在=车睡着）：60s 一次、单次尝试——唤醒预算压到每分钟至多 1 次。
-                // 旧实现 10s 节奏 × attempts=3（每次失败都会 wake+30s 重试握手），GATT 挂着而
-                // 车机睡着时最多 6 次唤醒/3 分钟循环不止，正撞"别反复唤醒车机"。
-                readVehicleData(listOf(Payloads.Category.CHARGE), attempts = if (mcuReady) 3 else 1)
-                    ?.let { applyCharge(it) }
-                readVehicleData(listOf(Payloads.Category.CLIMATE), attempts = if (mcuReady) 3 else 1)?.let { data ->
+                // Both categories recheck fresh P/N + low speed + the shared driving latch at
+                // dispatch. All reads are quick/no-wake; no 15s × 3 fallback, even without a session.
+                readVehicleData(Payloads.Category.CHARGE)?.let { applyCharge(it) }
+                readVehicleData(Payloads.Category.CLIMATE)?.let { data ->
                     if (data.hasClimateState()) {
                         val cs = data.climateState
                         cluster.update {
@@ -473,21 +587,15 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
                     (charge.chargerPower ?: 0) > 0
             )
         }
-    }
-
-    fun stopBlePolling() {
-        if (pollingRefs > 0) pollingRefs--
-        if (pollingRefs > 0) return
-        fastJob?.cancel()
-        slowJob?.cancel()
-        locationJob?.cancel()
-        fastJob = null
-        slowJob = null
-        locationJob = null
-        stopTripGps()
-        stopHeadingSensor()
-        // 离开仪表/统计后没人再维护行驶信号：回到"不知道"，让各页恢复正常轮询。
-        c.vehicleMoving.value = false
+        if (charge.hasBatteryLevel()) {
+            val pending = pendingAccelSocResult
+            if (pending != null) {
+                accelResults.update { results ->
+                    results.map { if (it === pending) it.copy(socEnd = charge.batteryLevel) else it }
+                }
+                pendingAccelSocResult = null
+            }
+        }
     }
 
     /**
@@ -691,6 +799,8 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
     }
 
     fun clear() {
+        speedSeries.clear()
+        powerSeries.clear()
         speed.value = emptyList()
         power.value = emptyList()
     }

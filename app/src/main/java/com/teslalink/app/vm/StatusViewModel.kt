@@ -9,6 +9,7 @@ import com.teslalink.app.tools.AccidentHelper
 import com.teslalink.app.tools.PlaceResult
 import com.teslalink.app.vehicle.Payloads
 import com.teslalink.app.vehicle.VehicleConnection
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -57,15 +58,24 @@ data class StatusSnapshot(
     val updatedAtMs: Long = 0,
     /** When the head unit last answered; 0 means its fields are carried over and stale. */
     val mcuUpdatedAtMs: Long = 0,
+    /** Only an actual speed/shift field can renew its clock, not CHARGE/CLIMATE or an empty DRIVE. */
+    val driveSpeedAtMs: Long? = null,
+    val driveShiftAtMs: Long? = null,
+    /** 哨兵字段自己的时钟：CLOSURES 不是每轮都轮到，没有它旧值会被别的类"续命"成假新鲜。 */
+    val sentryAtMs: Long? = null,
 ) {
     fun shiftIsMoving(): Boolean = shiftState == "R" || shiftState == "N" || shiftState == "D"
 
+    /** 哨兵读数的新鲜窗口：它只在进页/命令后/展开时被读，60s 内算可用，过期只能算"较旧"。 */
+    fun sentryIsFresh(now: Long = System.currentTimeMillis()): Boolean =
+        readingIsFresh(sentryAtMs, now, 60_000L)
+
     /**
-     * 行驶判断用 60s 窗口（闸门宁可多灰一会儿也不能误放行），与控制页 6s 的"车机新鲜"窗口区分。
+     * 控制按钮仍把 N 视为非驻车；读数策略允许低速 N，但都只认 DRIVE 自己的时间戳。
      */
     fun recentlyMoving(now: Long = System.currentTimeMillis()): Boolean =
-        mcuUpdatedAtMs > 0 && now - mcuUpdatedAtMs < 60_000 &&
-            ((speedKmh ?: 0f) > 2f || shiftIsMoving())
+        (readingIsFresh(driveSpeedAtMs, now, 60_000L) && kotlin.math.abs(speedKmh ?: 0f) > 2f) ||
+            (readingIsFresh(driveShiftAtMs, now, 60_000L) && shiftIsMoving())
 
     // 行驶中 VCSEC 对开闭件一律报 UNKNOWN，而行驶中物理上不可能开着 —— 显示层推断为关。
     fun rearTrunkShown(moving: Boolean): Boolean? = rearTrunkOpen ?: if (moving) false else null
@@ -74,6 +84,68 @@ data class StatusSnapshot(
 
     fun chargePortShown(moving: Boolean): Boolean? = chargePortOpen ?: if (moving) false else null
 }
+
+internal fun StatusSnapshot.driveReadings(): DriveReadings =
+    DriveReadings(speedKmh, shiftState, driveSpeedAtMs, driveShiftAtMs)
+
+internal fun applyStatusDrive(
+    previous: StatusSnapshot,
+    data: Vehicle.VehicleData,
+    now: Long,
+): StatusSnapshot {
+    val sample = parseDriveSample(data)
+    val readings = previous.driveReadings().updated(sample, now)
+    return previous.copy(
+        speedKmh = readings.speedKmh,
+        shiftState = readings.shift,
+        driveSpeedAtMs = readings.speedAtMs,
+        driveShiftAtMs = readings.shiftAtMs,
+        powerKw = if (data.hasDriveState() && data.driveState.hasPower()) data.driveState.power else previous.powerKw,
+    )
+}
+
+internal fun statusReadsBlocked(
+    vehicleMoving: Boolean,
+    drivingUntilMs: Long,
+    snapshot: StatusSnapshot?,
+    now: Long,
+): Boolean = vehicleMoving || drivingUntilMs > now || snapshot?.driveReadings()?.moving(now, 60_000L) == true
+
+internal fun statusCategoryAllowed(
+    category: Payloads.Category,
+    vehicleMoving: Boolean,
+    drivingUntilMs: Long,
+    snapshot: StatusSnapshot?,
+    now: Long,
+): Boolean = !statusReadsBlocked(vehicleMoving, drivingUntilMs, snapshot, now) &&
+    (category == Payloads.Category.DRIVE || snapshot?.driveReadings()?.allowsSlowRead(now, drivingUntilMs) == true)
+
+/**
+ * 唤醒探针的唯一准入：人主动进页面/命令后回读、车机域没有活会话、且此刻没在行驶。
+ * 车机睡着时所有车机域读都在 2.5s 内失败，驻车想看电量只能唤醒一次；但唤醒握手的几十秒里
+ * infotainmentMutex 是被占着的，所以一轮只发一次、只发 CHARGE 一类。
+ */
+internal fun wakeProbeAllowed(
+    force: Boolean,
+    mcuSessionReady: Boolean,
+    readsBlocked: Boolean,
+    linkConnected: Boolean,
+): Boolean = force && !mcuSessionReady && !readsBlocked && linkConnected
+
+/**
+ * 唤醒探针每一步的准入：车速道正在拿帧、车开始动、或超过总时限，任一成立就收手。
+ * 唤醒本身已经发出去了，所以"收手"不会让车机继续睡——它只是不再占链路等回执。
+ */
+internal fun wakeProbeStepAllowed(
+    telemetryLaneActive: Boolean,
+    readsBlocked: Boolean,
+    nowMs: Long,
+    deadlineMs: Long,
+): Boolean = !telemetryLaneActive && !readsBlocked && nowMs < deadlineMs
+
+/** 车机从收到唤醒到能答话一般十几到几十秒：给探针一个总时限，超了就认定这次没起来。 */
+private const val WAKE_PROBE_WAIT_MS = 30_000L
+private const val WAKE_PROBE_RETRY_MS = 2_000L
 
 /** BLE-only status: merges body-controller state with infotainment vehicle data. */
 class StatusViewModel(private val c: AppContainer) : ViewModel() {
@@ -99,12 +171,13 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
 
     /** Why the head unit didn't answer this round; surfaced so "--" is never silent. */
     @Volatile private var lastMcuError: String? = null
+    private val readLog = TelemetryReadLog("status-read")
 
-    /**
-     * Wake-ups are expensive for the car: with the head unit asleep one read costs a failed
-     * handshake (8 s) plus a wake plus a retry (30 s). The auto poller gets a single probe, then
-     * reads only the unauthenticated controller until he taps 刷新.
-     */
+    private fun readsBlocked(): Boolean = statusReadsBlocked(
+        c.vehicleMoving.value, c.drivingUntilMs.value, snapshot.value, System.currentTimeMillis(),
+    )
+
+    /** With no session, allow one bounded no-wake probe, then wait for a session/manual refresh. */
     @Volatile private var autoMcuProbes = 0
 
     init {
@@ -174,8 +247,8 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
         bodyJob = viewModelScope.launch {
             while (isActive) {
                 // 行驶中不需要 GET_STATUS：门锁/开闭件在行车期间不会变（显示层已按"行驶中推断为关"），
-                // 省下链路给车速。两个行驶信号源：仪表页的实时车速、本页快照里 60s 窗口内的移动。
-                val moving = c.vehicleMoving.value || snapshot.value?.recentlyMoving() == true
+                // 省下链路给车速：D/R 零速也由共享 90s 行驶闩拦截，不只看 vehicleMoving。
+                val moving = readsBlocked()
                 if (!moving) refreshBody()
                 delay(if (moving) 10_000L else intervalMs)
             }
@@ -194,19 +267,28 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
      * read-back right after a command, which is exactly when the buttons need fresh state.
      */
     fun refreshBody(force: Boolean = false) {
-        if (bodyInFlight) return
+        if (bodyInFlight || readsBlocked()) return
         if (!force && c.connection.exclusive.value) return
         if (c.connection.state.value != VehicleConnection.State.CONNECTED) return
         viewModelScope.launch {
-            bodyInFlight = true
-            val body = try {
-                c.connection.bodyControllerState()
-            } catch (e: Exception) {
-                null
-            }
-            if (body != null) {
-                snapshot.update { (it ?: StatusSnapshot()).withBody(body) }
-            }
+            val body = readBody() ?: return@launch
+            snapshot.update { (it ?: StatusSnapshot()).withBody(body) }
+        }
+    }
+
+    /** Also used at the end of a multi-category refresh: never append VCSEC once driving starts. */
+    private suspend fun readBody(): VehicleConnection.BodyControllerState? {
+        if (bodyInFlight || readsBlocked() || c.connection.state.value != VehicleConnection.State.CONNECTED) return null
+        bodyInFlight = true
+        val started = System.currentTimeMillis()
+        return try {
+            c.connection.bodyControllerState().also { readLog.record("VCSEC", started) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            readLog.record("VCSEC", started, "${e.javaClass.simpleName}: ${e.message}")
+            null
+        } finally {
             bodyInFlight = false
         }
     }
@@ -244,14 +326,13 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
     fun refresh(force: Boolean = false) {
         if (mcuInFlight) return
         if (!force && c.connection.exclusive.value) return
-        // 他 2026-10-17 定的死规矩：车速新鲜度压倒一切。行驶中（车速道活着，或 60s 内车在动）
-        // 不跑五类大类轮——每类都是一次独立请求，全排在同一条 infotainmentMutex 上，
-        // 一轮就能把仪表的 DRIVE 读堵住好几秒。写命令（空调/温度等小请求）不受此限。
-        if (c.vehicleMoving.value || snapshot.value?.recentlyMoving() == true) {
+        // force 仅绕过命令占用，不绕过行驶闩：D/R 等灯、90s 闩有效期间也不给大类读数排队。
+        if (readsBlocked()) {
             hint.value = "行驶中：暂停读取车机大类（带宽让给车速），停车后自动恢复"
             return
         }
         viewModelScope.launch {
+            if (mcuInFlight || readsBlocked()) return@launch
             mcuInFlight = true
             refreshing.value = true
             error.value = null
@@ -261,10 +342,16 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
                     return@launch
                 }
                 val mcuReady = c.connection.mcuSessionReady.value
+                val wakeProbe = wakeProbeAllowed(
+                    force = force,
+                    mcuSessionReady = mcuReady,
+                    readsBlocked = readsBlocked(),
+                    linkConnected = c.connection.state.value == VehicleConnection.State.CONNECTED,
+                )
                 if (force || mcuReady || autoMcuProbes < 1) {
                     if (!mcuReady) autoMcuProbes++
                     hint.value = null
-                    val fresh = bleSnapshot()
+                    val fresh = bleSnapshot(wakeProbe = wakeProbe)
                     // The head unit answered: hand the auto poller its probe budget back.
                     if (fresh.mcuUpdatedAtMs > 0) autoMcuProbes = 0
                     // Atomic merge: this round trip takes seconds, during which the 3s body poll may
@@ -274,14 +361,45 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
                     refreshBody(force = true)
                     // Keep the reason visible instead of letting the next 10 s round erase it.
                     val why = lastMcuError?.let { "（上次尝试：$it）" }.orEmpty()
-                    hint.value = "车机未唤醒：电量/温度/位置需要车机响应$why，点右上角「刷新」再试一次"
+                    hint.value = "车机未唤醒：电量/温度/位置需要车机响应$why，退出再进「控制」页会自动再唤醒一次"
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error.value = e.message
             } finally {
                 refreshing.value = false
                 mcuInFlight = false
             }
+        }
+    }
+
+    /**
+     * 命令后的针对性回读：整轮 bleSnapshot 的第一类是 DRIVE，DRIVE 不给完整速度/档位就 break，
+     * CLOSURES（哨兵这类 MCU 侧状态）会被连坐跳过；而且车机对命令的状态迁移是异步的，
+     * ack 后立刻读常拿到旧值。这里延后 2 秒、只读 CLOSURES 一类（单次尝试的原子短读）。
+     */
+    fun refreshClosuresDelayed(delayMs: Long = 2_000) {
+        viewModelScope.launch {
+            delay(delayMs)
+            if (mcuInFlight || readsBlocked() ||
+                c.connection.state.value != VehicleConnection.State.CONNECTED ||
+                !c.connection.mcuSessionReady.value
+            ) {
+                return@launch
+            }
+            val started = System.currentTimeMillis()
+            val data = try {
+                c.connection.vehicleData(
+                    listOf(Payloads.Category.CLOSURES), attempts = 1, timeoutMs = 1_200, wake = false,
+                ).also { readLog.record("CLOSURES", started) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                readLog.record("CLOSURES", started, "${e.javaClass.simpleName}: ${e.message}")
+                return@launch
+            }
+            snapshot.update { prev -> mergeSnapshot(prev, parseBleVehicleData(data)) }
         }
     }
 
@@ -325,86 +443,126 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
         }
     }
 
-    private suspend fun bleSnapshot(): StatusSnapshot {
+    /**
+     * 唤醒探针：车机睡着时所有车机域读都会失败，驻车想看电量只能先唤醒。
+     * 唤醒指令本身走 VCSEC（不占车机域锁），之后**只用单次尝试的原子短读等车机起来**：
+     * 每次一类 CHARGE、2s 总预算、不发第二次唤醒；每一步前都重新问"车速道是不是在拿帧/车是不是
+     * 在动"，是就立刻收手。所以车机域锁最多被一次 2 秒的读占住，而不是一条几十秒的长请求。
+     */
+    private suspend fun wakeProbeCharge(): Vehicle.VehicleData? {
+        val wake = c.connection.wakeCommand()
+        if (!wake.ok) {
+            lastMcuError = wake.message
+            hint.value = "唤醒车机没成功（${wake.message ?: "无应答"}）：人在车旁时再切进本页会自动重试"
+            return null
+        }
+        val deadline = System.currentTimeMillis() + WAKE_PROBE_WAIT_MS
+        var silentRounds = 0
+        while (wakeProbeStepAllowed(c.connection.telemetryLaneActive(), readsBlocked(), System.currentTimeMillis(), deadline)) {
+            val started = System.currentTimeMillis()
+            val data = try {
+                c.connection.vehicleData(
+                    listOf(Payloads.Category.CHARGE), attempts = 1, timeoutMs = 2_000, wake = false,
+                ).also { readLog.record("唤醒", started) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                silentRounds++
+                lastMcuError = e.message
+                readLog.record("唤醒", started, "${e.javaClass.simpleName}: ${e.message}")
+                null
+            }
+            if (data != null) return data
+            delay(WAKE_PROBE_RETRY_MS)
+        }
+        if (c.connection.telemetryLaneActive()) {
+            hint.value = "车速道要用链路，已停止唤醒等待：停车后再进本页会接着唤醒"
+        } else if (readsBlocked()) {
+            hint.value = "已发唤醒但车开始动了，停止等待：唤醒后车机会自己醒着，稍后再进本页读数"
+        } else if (silentRounds > 0) {
+            hint.value = "已发唤醒，车机 ${WAKE_PROBE_WAIT_MS / 1000} 秒内没答话（${lastMcuError ?: "无应答"}）：再进本页会重试"
+        }
+        return null
+    }
+
+    private suspend fun bleSnapshot(wakeProbe: Boolean = false): StatusSnapshot {
         // One category per request: a multi-category response exceeds the negotiated MTU and the
         // vehicle rejects it wholesale (RESPONSE_MTU_EXCEEDED). A failed category just stays null.
-        // 顺序按"控制页的按钮闸门"排：CLOSURES 带哨兵状态，放第一个，读到就能放行按钮；
-        // DRIVE/LOCATION 只喂车辆详情，放最后。
+        // DRIVE first: a P → D transition at zero speed must stop the remaining categories,
+        // even when the dashboard is not visible. Missing DRIVE does not grant parking evidence.
         var snap = StatusSnapshot()
         lastMcuError = null
         var mcuFailures = 0
+        if (wakeProbe) {
+            val probed = wakeProbeCharge()
+            if (probed != null) {
+                snap = parseBleVehicleData(probed).mergedInto(snap)
+                publishProgress(snap)
+            }
+        }
         for (category in listOf(
+            Payloads.Category.DRIVE,
             Payloads.Category.CLOSURES,
             Payloads.Category.CLIMATE,
             Payloads.Category.CHARGE,
-            Payloads.Category.DRIVE,
             Payloads.Category.LOCATION,
         )) {
-            // 车开起来了（比如他在大类轮没跑完时切回仪表）：立刻收手，整条链路让给车速道。
-            if (c.vehicleMoving.value || snapshot.value?.recentlyMoving() == true) break
+            // Re-evaluate before EVERY request, not just at the start of the refresh.
+            if (!statusCategoryAllowed(
+                    category, c.vehicleMoving.value, c.drivingUntilMs.value,
+                    snapshot.value, System.currentTimeMillis(),
+                )
+            ) {
+                hint.value = if (readsBlocked()) "行驶中：暂停读取车机大类（带宽让给车速）"
+                else "等待新鲜的 P/N 档及低速读数，暂不读取车机慢类"
+                break
+            }
+            val started = System.currentTimeMillis()
             val data = try {
-                c.connection.vehicleData(listOf(category))
+                c.connection.vehicleData(
+                    // 单类、单次尝试、1.2s：本页没有车速道在跑（车速轮询只属于仪表/统计/工具），
+                    // 所以预算可以比仪表慢道的 700ms 宽松一点，但仍然是一口一停的原子读。
+                    listOf(category), attempts = 1, timeoutMs = 1_200, wake = false,
+                ).also { readLog.record(category.name, started) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 mcuFailures++
                 if (lastMcuError == null) lastMcuError = e.message
-                // Session-level failure: the head unit is asleep or refuses our key, and the
-                // remaining categories would each repeat a ~40 s wake-and-retry. Cut the round short
-                // and report the reason instead of leaving the page on a silent wall of "--".
-                if (!c.connection.mcuSessionReady.value) break
+                readLog.record(category.name, started, "${e.javaClass.simpleName}: ${e.message}")
+                // Don't repeat a failed session probe for every remaining category.
+                if (!c.connection.mcuSessionReady.value || category == Payloads.Category.DRIVE) break
                 null
             } ?: continue
             snap = parseBleVehicleData(data).mergedInto(snap)
-            // 每读到一类就立刻发布：整轮要好几秒，等全部读完才刷新，界面上就是"状态来得特别慢"。
+            // Publish actual fields before updating the shared latch; never derive it from snap's
+            // carried-over speed/shift. A new D/R frame blocks the very next class and final VCSEC.
             publishProgress(snap)
+            c.drivingUntilMs.value = nextDrivingUntil(
+                c.drivingUntilMs.value, parseDriveSample(data), System.currentTimeMillis(),
+            )
+            if (category == Payloads.Category.DRIVE) {
+                val sample = parseDriveSample(data)
+                if (sample.speedKmh == null || sample.shift == null) {
+                    hint.value = "DRIVE 未返回完整速度/档位，保留上次读数并暂停慢读"
+                    readLog.record("DRIVE", started, "响应缺少有效速度/档位")
+                    break
+                }
+            }
         }
         if (snap.mcuUpdatedAtMs == 0L && mcuFailures > 0) {
             val reason = lastMcuError ?: "无响应"
             error.value = if ("配对" in reason) {
-                "车机读数被拒（$reason）：本机钥匙未被车辆认可，请到「车辆」页重新配对"
+                "车机读数被拒（$reason）：本机钥匙未被车辆认可，请到「设置」页重新发送配对请求"
             } else {
                 "车机读数失败（$mcuFailures 类）：$reason"
             }
         }
 
-        val body = try {
-            c.connection.bodyControllerState()
-        } catch (e: Exception) {
-            null
-        }
+        val body = readBody()
         if (body != null) snap = snap.withBody(body)
         return snap
     }
-
-    /** Overlay one per-category read onto the accumulator. */
-    private fun StatusSnapshot.mergedInto(base: StatusSnapshot): StatusSnapshot = copy(
-        batteryLevel = batteryLevel ?: base.batteryLevel,
-        batteryRangeKm = batteryRangeKm ?: base.batteryRangeKm,
-        chargeLimit = chargeLimit ?: base.chargeLimit,
-        chargingState = chargingState ?: base.chargingState,
-        chargePowerKw = chargePowerKw ?: base.chargePowerKw,
-        insideTemp = insideTemp ?: base.insideTemp,
-        outsideTemp = outsideTemp ?: base.outsideTemp,
-        climateOn = climateOn ?: base.climateOn,
-        driverTemp = driverTemp ?: base.driverTemp,
-        hvacAuto = hvacAuto ?: base.hvacAuto,
-        fanLevel = fanLevel ?: base.fanLevel,
-        speedKmh = speedKmh ?: base.speedKmh,
-        powerKw = powerKw ?: base.powerKw,
-        latitude = latitude ?: base.latitude,
-        longitude = longitude ?: base.longitude,
-        heading = heading ?: base.heading,
-        shiftState = shiftState ?: base.shiftState,
-        seatHeatLeft = seatHeatLeft ?: base.seatHeatLeft,
-        seatHeatRight = seatHeatRight ?: base.seatHeatRight,
-        seatCoolLeft = seatCoolLeft ?: base.seatCoolLeft,
-        seatCoolRight = seatCoolRight ?: base.seatCoolRight,
-        swHeater = swHeater ?: base.swHeater,
-        maxDefrost = maxDefrost ?: base.maxDefrost,
-        keeper = keeper ?: base.keeper,
-        bioweaponOn = bioweaponOn ?: base.bioweaponOn,
-        sentryOn = sentryOn ?: base.sentryOn,
-        mcuUpdatedAtMs = maxOf(mcuUpdatedAtMs, base.mcuUpdatedAtMs),
-    )
 
     private fun keeperName(climate: Vehicle.ClimateState): String? =
         when (climate.climateKeeperMode.typeCase) {
@@ -416,10 +574,9 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
         }
 
     private fun parseBleVehicleData(data: Vehicle.VehicleData): StatusSnapshot {
-        // Reaching here means the head unit answered: mark the MCU clock so callers can tell a
-        // live reading from one carried over from an earlier round.
+        // Only parsed readings renew the MCU clock; an empty reply must not freshen cached UI values.
         val now = System.currentTimeMillis()
-        var snap = StatusSnapshot(updatedAtMs = now, mcuUpdatedAtMs = now)
+        var snap = StatusSnapshot()
         if (data.hasChargeState()) {
             val charge = data.chargeState
             val chargingStateName = if (charge.hasChargingState()) {
@@ -466,41 +623,25 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
                 bioweaponOn = if (climate.hasBioweaponModeOn()) climate.bioweaponModeOn else null,
             )
         }
-        if (data.hasDriveState()) {
-            val drive = data.driveState
-            snap = snap.copy(
-                speedKmh = when {
-                    drive.hasSpeedFloat() -> drive.speedFloat * 1.609344f
-                    drive.hasSpeed() -> drive.speed * 1.609344f
-                    else -> null
-                },
-                powerKw = if (drive.hasPower()) drive.power else null,
-                shiftState = when (drive.shiftState.typeCase) {
-                    Vehicle.ShiftState.TypeCase.P -> "P"
-                    Vehicle.ShiftState.TypeCase.R -> "R"
-                    Vehicle.ShiftState.TypeCase.N -> "N"
-                    Vehicle.ShiftState.TypeCase.D -> "D"
-                    else -> null
-                },
-            )
-        }
-        // 哨兵状态在 ClosuresState 里（需要单独的 CLOSURES 类别请求）。
+        snap = applyStatusDrive(snap, data, now)
+        // 哨兵状态在 ClosuresState 里（需要单独的 CLOSURES 类别请求）。字段级时钟必须有：
+        // mcuUpdatedAtMs 会被任意一类的成功解析续命（连只读 CHARGE 的唤醒探针都会），
+        // 没有自己的时间戳，几小时前的哨兵旧值会伪装成新鲜值参与按钮互斥。
         if (data.hasClosuresState()) {
             val closures = data.closuresState
             if (closures.hasSentryModeState()) {
-                snap = snap.copy(
-                    sentryOn = when (closures.sentryModeState.typeCase) {
-                        Vehicle.ClosuresState.SentryModeState.TypeCase.OFF,
-                        Vehicle.ClosuresState.SentryModeState.TypeCase.IDLE,
-                        -> false
-                        Vehicle.ClosuresState.SentryModeState.TypeCase.ARMED,
-                        Vehicle.ClosuresState.SentryModeState.TypeCase.AWARE,
-                        Vehicle.ClosuresState.SentryModeState.TypeCase.QUIET,
-                        Vehicle.ClosuresState.SentryModeState.TypeCase.PANIC,
-                        -> true
-                        else -> null
-                    }
-                )
+                val sentry = when (closures.sentryModeState.typeCase) {
+                    Vehicle.ClosuresState.SentryModeState.TypeCase.OFF,
+                    Vehicle.ClosuresState.SentryModeState.TypeCase.IDLE,
+                    -> false
+                    Vehicle.ClosuresState.SentryModeState.TypeCase.ARMED,
+                    Vehicle.ClosuresState.SentryModeState.TypeCase.AWARE,
+                    Vehicle.ClosuresState.SentryModeState.TypeCase.QUIET,
+                    Vehicle.ClosuresState.SentryModeState.TypeCase.PANIC,
+                    -> true
+                    else -> null
+                }
+                if (sentry != null) snap = snap.copy(sentryOn = sentry, sentryAtMs = now)
             }
         }
         if (data.hasLocationState()) {
@@ -521,6 +662,40 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
                 heading = if (loc.hasHeading()) loc.heading else null,
             )
         }
-        return snap
+        return if (snap == StatusSnapshot()) snap else snap.copy(updatedAtMs = now, mcuUpdatedAtMs = now)
     }
 }
+
+/** Overlay one per-category read onto the accumulator: 本轮没答上的字段沿用旧值与旧时钟。 */
+internal fun StatusSnapshot.mergedInto(base: StatusSnapshot): StatusSnapshot = copy(
+    batteryLevel = batteryLevel ?: base.batteryLevel,
+    batteryRangeKm = batteryRangeKm ?: base.batteryRangeKm,
+    chargeLimit = chargeLimit ?: base.chargeLimit,
+    chargingState = chargingState ?: base.chargingState,
+    chargePowerKw = chargePowerKw ?: base.chargePowerKw,
+    insideTemp = insideTemp ?: base.insideTemp,
+    outsideTemp = outsideTemp ?: base.outsideTemp,
+    climateOn = climateOn ?: base.climateOn,
+    driverTemp = driverTemp ?: base.driverTemp,
+    hvacAuto = hvacAuto ?: base.hvacAuto,
+    fanLevel = fanLevel ?: base.fanLevel,
+    speedKmh = speedKmh ?: base.speedKmh,
+    driveSpeedAtMs = driveSpeedAtMs ?: base.driveSpeedAtMs,
+    driveShiftAtMs = driveShiftAtMs ?: base.driveShiftAtMs,
+    powerKw = powerKw ?: base.powerKw,
+    latitude = latitude ?: base.latitude,
+    longitude = longitude ?: base.longitude,
+    heading = heading ?: base.heading,
+    shiftState = shiftState ?: base.shiftState,
+    seatHeatLeft = seatHeatLeft ?: base.seatHeatLeft,
+    seatHeatRight = seatHeatRight ?: base.seatHeatRight,
+    seatCoolLeft = seatCoolLeft ?: base.seatCoolLeft,
+    seatCoolRight = seatCoolRight ?: base.seatCoolRight,
+    swHeater = swHeater ?: base.swHeater,
+    maxDefrost = maxDefrost ?: base.maxDefrost,
+    keeper = keeper ?: base.keeper,
+    bioweaponOn = bioweaponOn ?: base.bioweaponOn,
+    sentryOn = sentryOn ?: base.sentryOn,
+    sentryAtMs = sentryAtMs ?: base.sentryAtMs,
+    mcuUpdatedAtMs = maxOf(mcuUpdatedAtMs, base.mcuUpdatedAtMs),
+)

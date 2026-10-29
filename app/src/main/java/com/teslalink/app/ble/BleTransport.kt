@@ -9,30 +9,30 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.teslalink.app.protocol.Transport
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.security.MessageDigest
 import java.util.UUID
-import kotlin.coroutines.resume
 
 /**
  * BLE transport implementing the vehicle-command GATT interface.
@@ -69,14 +69,24 @@ class BleTransport(
     private val _state = MutableStateFlow(ConnectionState.DISCONNECTED)
     val state: StateFlow<ConnectionState> get() = _state
 
-    private var gatt: BluetoothGatt? = null
-    private var txChar: BluetoothGattCharacteristic? = null
-    private var blockLength = DEFAULT_MTU - 3
-    private var inputBuffer = ByteArray(0)
-    private var lastRxAt = 0L
-    private var currentWrite: CompletableDeferred<Boolean>? = null
+    // disconnect() can be called from any thread. Keep ownership, callbacks and GATT
+    // enqueue calls under the same lock; never hold it across a suspension.
+    private val gattLock = Any()
+    private val callbackHandler = Handler(Looper.getMainLooper())
+    private var connection: Connection? = null
     private val txMutex = Mutex()
-    @Volatile private var closed = false
+
+    private class Connection {
+        val session = GattSession<BluetoothGatt>()
+        var tx: BluetoothGattCharacteristic? = null
+        var rx: BluetoothGattCharacteristic? = null
+        var cccd: BluetoothGattDescriptor? = null
+        var cccdQueued = false
+        var blockLength = DEFAULT_MTU - 3
+        var inputBuffer = ByteArray(0)
+        var lastRxAt = 0L
+    }
+
     /** Why the last GATT setup failed, e.g. "车辆服务未找到" — surfaced in errors. */
     @Volatile var connectFailReason: String? = null
         private set
@@ -245,188 +255,237 @@ class BleTransport(
 
     /** Connect to an explicit device (used by the debug-page probe). */
     suspend fun connectDevice(device: BluetoothDevice, gattTimeoutMs: Long = 12_000) {
-        connectFailReason = null
-        _state.value = ConnectionState.CONNECTING
-        closed = false
-        connectGatt(device)
-        try {
-            withTimeout(gattTimeoutMs) {
-                while (_state.value != ConnectionState.CONNECTED) {
-                    if (_state.value == ConnectionState.DISCONNECTED) {
-                        throw GattFailedException(connectFailReason)
-                    }
-                    delay(50)
-                }
+        val attempt = synchronized(gattLock) {
+            val previous = connection
+            Connection().also {
+                // Install the new owner before waking any of the old owner's waiters.
+                connection = it
+                connectFailReason = null
+                previous?.let { old -> releaseGatt(old, IllegalStateException("GATT 被新连接替换")) }
+                _state.value = ConnectionState.CONNECTING
             }
-        } catch (e: GattFailedException) {
-            releaseGatt()
-            throw IllegalStateException(
-                "GATT 连接被设备断开${e.reason?.let { "：$it" } ?: "（BLE 连接已满、设备不在范围或蓝牙栈抖动）"}"
-            )
-        } catch (e: TimeoutCancellationException) {
-            releaseGatt()
-            throw IllegalStateException(
-                "GATT 连接在 ${gattTimeoutMs / 1000} 秒内未完成" +
-                    "${connectFailReason?.let { "：$it" } ?: "（连接已满或车机休眠）"}"
-            )
+        }
+        withGattCleanup(release = { failure ->
+            synchronized(gattLock) {
+                // A cancelled/late attempt must never tear down a newer connection.
+                if (connection === attempt && failure !is CancellationException) {
+                    connectFailReason = failure.message
+                }
+                releaseGatt(attempt, failure)
+            }
+        }) {
+            withTimeoutOrNull(gattTimeoutMs) {
+                // Non-immediate dispatcher: completing a callback posts the next setup step,
+                // rather than making another Android request inside the current callback.
+                withContext(Dispatchers.Main) { connectGatt(device, attempt) }
+                true
+            } ?: throw IllegalStateException("GATT 连接在 ${gattTimeoutMs / 1000} 秒内未完成")
+            withConnection(attempt) {
+                check(attempt.session.ready && _state.value == ConnectionState.CONNECTED) { "GATT 连接已断开" }
+            }
         }
     }
 
-    /**
-     * 失败路径必须 close。只 disconnect() 的话 BluetoothGatt 的回调还注册着，而
-     * 「记住的地址直连失败 → 回退扫描重连」会在同一个 transport 上再开一个 GATT，
-     * 前一个再也没人释放：手机侧攒僵尸连接，车那边 3 条上限也被占着，
-     * 表现就是越试越连不上（status=133 / 一直超时）。
-     */
-    private fun releaseGatt() {
-        runCatching { gatt?.disconnect() }
-        runCatching { gatt?.close() }
-        gatt = null
-        _state.value = ConnectionState.DISCONNECTED
+    /** Detach before any stack calls or waiter resumption; close even if disconnect throws. */
+    private fun releaseGatt(attempt: Connection, cause: Throwable): Unit = synchronized(gattLock) {
+        val wasCurrent = connection === attempt
+        if (wasCurrent) connection = null
+        val detached = attempt.session.close(cause)
+        attempt.tx = null
+        attempt.rx = null
+        attempt.cccd = null
+        attempt.cccdQueued = false
+        attempt.blockLength = DEFAULT_MTU - 3
+        attempt.inputBuffer = ByteArray(0)
+        attempt.lastRxAt = 0L
+        if (detached != null) {
+            runCatching { detached.disconnect() }
+            runCatching { detached.close() }
+        }
+        if (wasCurrent && connection == null) _state.value = ConnectionState.DISCONNECTED
     }
 
-    private class GattFailedException(val reason: String?) :
-        IllegalStateException("GATT 连接被断开: $reason")
+    private fun <T> withConnection(attempt: Connection, action: () -> T): T = synchronized(gattLock) {
+        attempt.session.checkOpen()
+        check(connection === attempt) { "GATT 连接已被替换" }
+        action()
+    }
 
-    private suspend fun connectGatt(device: BluetoothDevice) = suspendCancellableCoroutine { cont ->
-        val log = fun(msg: String) = com.teslalink.app.debug.DebugLog.log("ble-gatt", msg)
-        val callback = object : BluetoothGattCallback() {
-            override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-                log("onConnectionStateChange status=$status newState=$newState")
-                when (newState) {
-                    BluetoothProfile.STATE_CONNECTED -> g.requestMtu(MAX_MTU)
-                    BluetoothProfile.STATE_DISCONNECTED -> {
-                        _state.value = ConnectionState.DISCONNECTED
-                        inputBuffer = ByteArray(0)
-                        if (!cont.isCompleted) {
-                            cont.resume(Unit)
-                        }
-                        currentWrite?.complete(false)
-                        currentWrite = null
+    private suspend fun setupStep(
+        attempt: Connection,
+        step: GattSession.Step,
+        start: suspend () -> Unit,
+    ): GattSession.Reply {
+        val waiter = withConnection(attempt) { attempt.session.begin(step) }
+        start()
+        val reply = waiter.await()
+        withConnection(attempt) { attempt.session.finish(step) }
+        return reply
+    }
+
+    private suspend fun connectGatt(device: BluetoothDevice, attempt: Connection) {
+        setupStep(attempt, GattSession.Step.CONNECT) {
+            withConnection(attempt) {
+                val g = device.connectGatt(
+                    appContext, false, callbackFor(attempt), BluetoothDevice.TRANSPORT_LE,
+                    BluetoothDevice.PHY_LE_1M_MASK, callbackHandler,
+                ) ?: throw IllegalStateException("connectGatt 未返回句柄")
+                attempt.session.attach(g)
+            }
+        }
+        val mtu = setupStep(attempt, GattSession.Step.MTU) {
+            withConnection(attempt) {
+                if (!checkNotNull(attempt.session.handle).requestMtu(MAX_MTU)) {
+                    logGatt("requestMtu 未入队，使用默认 MTU=$DEFAULT_MTU")
+                    attempt.session.report(GattSession.Step.MTU, GattSession.Reply(0, DEFAULT_MTU))
+                }
+            }
+        }
+        withConnection(attempt) {
+            attempt.blockLength = (if (mtu.status == BluetoothGatt.GATT_SUCCESS) mtu.mtu else DEFAULT_MTU)
+                .coerceIn(DEFAULT_MTU, MAX_MTU) - 3
+        }
+        setupStep(attempt, GattSession.Step.SERVICES) {
+            withConnection(attempt) {
+                check(checkNotNull(attempt.session.handle).discoverServices()) { "服务发现失败（discoverServices 未入队）" }
+            }
+        }
+        withConnection(attempt) {
+            val g = checkNotNull(attempt.session.handle)
+            val service = g.getService(VEHICLE_SERVICE_UUID)
+                ?: g.services?.firstOrNull { isVehicleServiceUuid(it.uuid) }
+                ?: throw IllegalStateException("该设备没有车辆服务 (实际服务: ${g.services?.map { it.uuid }})")
+            attempt.tx = service.getCharacteristic(TO_VEHICLE_UUID)
+            attempt.rx = service.getCharacteristic(FROM_VEHICLE_UUID)
+            val rx = attempt.rx
+            check(attempt.tx != null && rx != null) {
+                "车辆服务存在但读写特征缺失 (tx=${attempt.tx != null} rx=${rx != null})"
+            }
+            attempt.cccd = rx.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG)
+                ?: throw IllegalStateException("订阅车辆通知失败（缺少 CCCD 描述符）")
+            check(g.setCharacteristicNotification(rx, true)) {
+                "订阅车辆通知失败（setCharacteristicNotification 返回 false）"
+            }
+        }
+        setupStep(attempt, GattSession.Step.CCCD) {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                val status = retryGattBusy(BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY) {
+                    withConnection(attempt) {
+                        val status = checkNotNull(attempt.session.handle).writeDescriptor(
+                            checkNotNull(attempt.cccd), BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE,
+                        )
+                        attempt.cccdQueued = status == BluetoothStatusCodes.SUCCESS
+                        logGatt("writeDescriptor statusCode=$status queued=${attempt.cccdQueued}")
+                        status
                     }
                 }
-            }
-
-            override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
-                log("onMtuChanged mtu=$mtu status=$status")
-                blockLength = (if (status == BluetoothGatt.GATT_SUCCESS) mtu else DEFAULT_MTU)
-                    .coerceAtMost(1024) - 3
-                g.discoverServices()
-            }
-
-            override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-                log("onServicesDiscovered status=$status services=${g.services?.size}")
-                if (status != BluetoothGatt.GATT_SUCCESS) {
-                    connectFailReason = "服务发现失败 status=$status"
-                    g.disconnect()
-                    return
+                check(status == BluetoothStatusCodes.SUCCESS) {
+                    "订阅车辆通知失败（writeDescriptor 未入队 statusCode=$status）"
                 }
-                val service = g.getService(VEHICLE_SERVICE_UUID)
-                    ?: g.services?.firstOrNull { containsVehicleService(listOf(it.uuid)) }
-                if (service == null) {
-                    connectFailReason = "该设备没有车辆服务 " +
-                        "(实际服务: ${g.services?.map { it.uuid?.toString() } ?: "无"})"
-                    log("未发现车辆服务 $VEHICLE_SERVICE_UUID；实际服务: ${g.services?.map { it.uuid }}")
-                    g.disconnect()
-                    return
-                }
-                txChar = service.getCharacteristic(TO_VEHICLE_UUID)
-                val rxChar = service.getCharacteristic(FROM_VEHICLE_UUID)
-                if (txChar == null || rxChar == null) {
-                    connectFailReason = "车辆服务存在但读写特征缺失 (tx=${txChar != null} rx=${rxChar != null})"
-                    log("服务存在但特征缺失 tx=${txChar != null} rx=${rxChar != null}")
-                    g.disconnect()
-                    return
-                }
-                g.setCharacteristicNotification(rxChar, true)
-                val cccd = rxChar.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG)
-                if (cccd == null) {
-                    // 极少数车机不给 CCCD 描述符：只能退化成"信任通知会来"。
-                    _state.value = ConnectionState.CONNECTED
-                    return
-                }
-                // 订阅请求本身可能失败（蓝牙栈抖动/缓冲不足）。旧实现无视结果直接置
-                // CONNECTED——通知一个都收不到，链路"假在线"，之后所有命令只表现为超时。
-                val queued: Boolean = if (android.os.Build.VERSION.SDK_INT >= 33) {
-                    // API 33 起这个重载返回 int 状态码（不是 Boolean）。
-                    g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
-                        BluetoothGatt.GATT_SUCCESS
-                } else {
+            } else {
+                withConnection(attempt) {
+                    val cccd = checkNotNull(attempt.cccd)
                     @Suppress("DEPRECATION")
                     cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                     @Suppress("DEPRECATION")
-                    g.writeDescriptor(cccd)
-                }
-                if (!queued) {
-                    connectFailReason = "订阅车辆通知失败（writeDescriptor 没排上队）"
-                    log("CCCD 订阅未入队，连接判定失败")
-                    g.disconnect()
-                }
-            }
-
-            override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-                log("onDescriptorWrite desc=${descriptor.uuid} status=$status")
-                if (status != BluetoothGatt.GATT_SUCCESS) {
-                    connectFailReason = "订阅车辆通知失败 status=$status"
-                    // 断开让外层超时/失败路径带着原因走，而不是"假在线"等每个命令超时。
-                    g.disconnect()
-                    return
-                }
-                _state.value = ConnectionState.CONNECTED
-            }
-
-            override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-                com.teslalink.app.debug.DebugLog.log("ble-gatt", "onCharacteristicWrite status=$status")
-                currentWrite?.complete(status == BluetoothGatt.GATT_SUCCESS)
-                currentWrite = null
-            }
-
-            override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
-                if (characteristic.uuid == FROM_VEHICLE_UUID) {
-                    onRx(value)
-                }
-            }
-
-            @Deprecated("pre-T callback")
-            override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-                if (characteristic.uuid == FROM_VEHICLE_UUID) {
-                    @Suppress("DEPRECATION")
-                    val value = characteristic.value ?: return
-                    onRx(value)
+                    val queued = checkNotNull(attempt.session.handle).writeDescriptor(cccd)
+                    attempt.cccdQueued = queued
+                    check(queued) { "订阅车辆通知失败（writeDescriptor 返回 false，未入队）" }
                 }
             }
         }
-        this.gatt = device.connectGatt(appContext, false, callback, BluetoothDevice.TRANSPORT_LE)
-        cont.resume(Unit)
+        withConnection(attempt) {
+            check(attempt.session.ready)
+            _state.value = ConnectionState.CONNECTED
+        }
+    }
+
+    private fun logGatt(message: String) = com.teslalink.app.debug.DebugLog.log("ble-gatt", message)
+
+    private fun callbackFor(attempt: Connection) = object : BluetoothGattCallback() {
+        private fun current(g: BluetoothGatt, report: () -> Unit): Unit = synchronized(gattLock) {
+            if (connection === attempt && attempt.session.owns(g)) report()
+        }
+
+        override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) = current(g) {
+            logGatt("onConnectionStateChange status=$status newState=$newState")
+            if (status != BluetoothGatt.GATT_SUCCESS || newState == BluetoothProfile.STATE_DISCONNECTED) {
+                val cause = IllegalStateException("GATT 连接断开 status=$status newState=$newState")
+                if (_state.value == ConnectionState.CONNECTING) connectFailReason = cause.message
+                releaseGatt(attempt, cause)
+            } else if (newState == BluetoothProfile.STATE_CONNECTED) {
+                attempt.session.report(GattSession.Step.CONNECT, GattSession.Reply(status))
+            }
+        }
+
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) = current(g) {
+            logGatt("onMtuChanged mtu=$mtu status=$status")
+            attempt.session.report(GattSession.Step.MTU, GattSession.Reply(status, mtu))
+        }
+
+        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) = current(g) {
+            logGatt("onServicesDiscovered status=$status")
+            attempt.session.report(GattSession.Step.SERVICES, GattSession.Reply(status))
+        }
+
+        override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) = current(g) {
+            if (descriptor === attempt.cccd && attempt.cccdQueued) {
+                logGatt("onDescriptorWrite desc=${descriptor.uuid} status=$status")
+                attempt.session.report(GattSession.Step.CCCD, GattSession.Reply(status))
+            }
+        }
+
+        override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) = current(g) {
+            if (characteristic === attempt.tx) {
+                // 每个分块一次：必须是惰性日志，否则 250ms 节奏下每秒都在主线程拼字符串+拷日志环。
+                com.teslalink.app.debug.DebugLog.v("ble-gatt") { "onCharacteristicWrite status=$status" }
+                attempt.session.reportWrite(status)
+            }
+        }
+
+        // A notification can arrive before the setup coroutine resumes after the CCCD
+        // receipt. Preserve it without publishing CONNECTED or allowing sends early.
+        override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) = current(g) {
+            if (characteristic === attempt.rx) onRx(attempt, value)
+        }
+
+        @Deprecated("pre-T callback")
+        override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) = current(g) {
+            if (characteristic === attempt.rx) {
+                @Suppress("DEPRECATION")
+                val value = characteristic.value
+                if (value != null) onRx(attempt, value)
+            }
+        }
     }
 
     // ---- Framing -----------------------------------------------------------
 
-    private fun onRx(chunk: ByteArray) {
+    private fun onRx(attempt: Connection, chunk: ByteArray) {
         val now = SystemClockMono.now()
-        if (now - lastRxAt > 1000) {
-            inputBuffer = ByteArray(0)
+        if (now - attempt.lastRxAt > 1000) {
+            attempt.inputBuffer = ByteArray(0)
         }
-        lastRxAt = now
-        inputBuffer += chunk
-        while (flush()) { /* drain */ }
+        attempt.lastRxAt = now
+        attempt.inputBuffer += chunk
+        while (flush(attempt)) { /* drain */ }
     }
 
-    private fun flush(): Boolean {
+    private fun flush(attempt: Connection): Boolean {
+        val inputBuffer = attempt.inputBuffer
         if (inputBuffer.size >= 2) {
             val msgLength = (inputBuffer[0].toInt() and 0xFF) * 256 + (inputBuffer[1].toInt() and 0xFF)
             if (msgLength > MAX_MESSAGE_SIZE) {
                 com.teslalink.app.debug.DebugLog.error("ble-framing", "非法帧长度 $msgLength，丢弃缓冲区")
-                inputBuffer = ByteArray(0)
+                attempt.inputBuffer = ByteArray(0)
                 return false
             }
             if (inputBuffer.size >= 2 + msgLength) {
                 val frame = inputBuffer.copyOfRange(2, 2 + msgLength)
-                inputBuffer = inputBuffer.copyOfRange(2 + msgLength, inputBuffer.size)
-                com.teslalink.app.debug.DebugLog.v(
-                    "ble-rx",
+                attempt.inputBuffer = inputBuffer.copyOfRange(2 + msgLength, inputBuffer.size)
+                com.teslalink.app.debug.DebugLog.v("ble-rx") {
                     "RX ${frame.size}B: ${com.teslalink.app.debug.DebugLog.hex(frame, 200)}"
-                )
+                }
                 _incoming.tryEmit(frame)
                 // Synchronous listeners: unlike a SharedFlow they cannot miss a frame that
                 // arrives before a coroutine gets scheduled (used for the add-key ack).
@@ -439,79 +498,62 @@ class BleTransport(
 
     // ---- Sending -----------------------------------------------------------
 
-    override suspend fun send(buffer: ByteArray) {
+    override suspend fun send(buffer: ByteArray) = withContext(Dispatchers.Main) {
         txMutex.withLock {
-            val g = gatt ?: throw IllegalStateException("BLE 未连接")
-            val tx = txChar ?: throw IllegalStateException("BLE 特征未就绪")
-            com.teslalink.app.debug.DebugLog.v(
-                "ble-tx",
-                "TX ${buffer.size}B blockLen=$blockLength: ${com.teslalink.app.debug.DebugLog.hex(buffer, 200)}"
-            )
-            // 长度头只有两字节：超过 65535 会被静默截断成错误的帧长（对端只当坏帧，现场极难查）。
-            // 这里按头部真实容量设限，不用 Rx 侧那个 1024 的接收上限——发送体是 protobuf 指令，
-            // 个别命令（带签名/带元数据）可以合法地比它大。
+            val attempt = synchronized(gattLock) {
+                check(_state.value == ConnectionState.CONNECTED) { "BLE 未连接或通知订阅未完成" }
+                checkNotNull(connection).also { check(it.session.ready) }
+            }
+            // Two-byte length prefix; reject before any part of the frame is sent.
             require(buffer.size <= MAX_TX_BODY) { "发送体 ${buffer.size}B 超过 2 字节长度头的上限 $MAX_TX_BODY B" }
+            val blockLength = withConnection(attempt) { attempt.blockLength }
+            com.teslalink.app.debug.DebugLog.v("ble-tx") {
+                "TX ${buffer.size}B blockLen=$blockLength: ${com.teslalink.app.debug.DebugLog.hex(buffer, 200)}"
+            }
             val out = byteArrayOf(
                 ((buffer.size shr 8) and 0xFF).toByte(),
                 (buffer.size and 0xFF).toByte(),
             ) + buffer
-            var block = blockLength
-            var offset = 0
-            while (offset < out.size) {
-                if (block > out.size - offset) block = out.size - offset
-                val chunk = out.copyOfRange(offset, offset + block)
-                val ok = writeChunk(g, tx, chunk)
-                if (!ok) throw IllegalStateException("BLE 写入失败")
-                offset += block
+            // Android write callbacks have no request ID. A cancelled/timed-out write
+            // cannot share this GATT with another frame, even if earlier chunks succeeded.
+            withGattCleanup(release = { releaseGatt(attempt, it) }) {
+                var offset = 0
+                while (offset < out.size) {
+                    val size = minOf(blockLength, out.size - offset)
+                    writeChunk(attempt, out.copyOfRange(offset, offset + size))
+                    offset += size
+                }
             }
         }
     }
 
-    private suspend fun writeChunk(
-        g: BluetoothGatt,
-        tx: BluetoothGattCharacteristic,
-        chunk: ByteArray,
-    ): Boolean {
-        val deferred = CompletableDeferred<Boolean>()
-        currentWrite = deferred
-        val accepted: Boolean = if (android.os.Build.VERSION.SDK_INT >= 33) {
-            g.writeCharacteristic(tx, chunk, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) ==
-                BluetoothGatt.GATT_SUCCESS
-        } else {
-            @Suppress("DEPRECATION")
-            tx.value = chunk
-            @Suppress("DEPRECATION")
-            tx.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-            @Suppress("DEPRECATION")
-            g.writeCharacteristic(tx)
+    private suspend fun writeChunk(attempt: Connection, chunk: ByteArray) {
+        val waiter = withConnection(attempt) {
+            check(_state.value == ConnectionState.CONNECTED) { "BLE 未连接" }
+            val g = checkNotNull(attempt.session.handle)
+            val tx = checkNotNull(attempt.tx)
+            val deferred = attempt.session.beginWrite()
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                val status = g.writeCharacteristic(tx, chunk, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+                check(status == BluetoothStatusCodes.SUCCESS) { "BLE 写入未入队 statusCode=$status" }
+            } else {
+                @Suppress("DEPRECATION")
+                tx.value = chunk
+                tx.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                @Suppress("DEPRECATION")
+                val queued = g.writeCharacteristic(tx)
+                check(queued) { "BLE 写入未入队（writeCharacteristic 返回 false）" }
+            }
+            deferred
         }
-        if (!accepted) {
-            currentWrite = null
-            return false
-        }
-        // Must time out: a dropped onCharacteristicWrite callback (common on OEM stacks) would
-        // otherwise leave this deferred pending forever and wedge txMutex for the whole session.
-        return try {
-            kotlinx.coroutines.withTimeout(WRITE_TIMEOUT_MS) { deferred.await() }
-        } catch (e: TimeoutCancellationException) {
-            com.teslalink.app.debug.DebugLog.error(
-                "ble-gatt",
-                "写入回执超时（${WRITE_TIMEOUT_MS}ms），放弃本次写"
-            )
-            false
-        } finally {
-            if (currentWrite === deferred) currentWrite = null
-        }
+        withTimeoutOrNull(WRITE_TIMEOUT_MS) { waiter.await() }
+            ?: throw IllegalStateException("写入回执超时（${WRITE_TIMEOUT_MS}ms），放弃该 GATT")
+        withConnection(attempt) { attempt.session.finishWrite(waiter) }
     }
 
-    fun disconnect() {
-        closed = true
-        try {
-            gatt?.disconnect()
-            gatt?.close()
-        } catch (_: Exception) { }
-        gatt = null
-        _state.value = ConnectionState.DISCONNECTED
+    fun disconnect() = synchronized(gattLock) {
+        connection?.let { releaseGatt(it, IllegalStateException("BLE 主动断开")) }
+        Unit
     }
 
     companion object {

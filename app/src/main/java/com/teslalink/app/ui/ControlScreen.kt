@@ -92,7 +92,12 @@ fun ControlScreen(vm: LinkViewModel, status: StatusViewModel) {
     LaunchedEffect(lastCommandAt) {
         if (lastCommandAt != null) {
             status.refreshBody(force = true)
-            if (lastCommandOk == true) status.refresh(force = true)
+            if (lastCommandOk == true) {
+                status.refresh(force = true)
+                // 整轮回读的 DRIVE 若不完整会连坐跳过 CLOSURES（哨兵），且车辆对哨兵等
+                // 开关的状态迁移是异步的——延后 2 秒再单独补一条 CLOSURES 原子读。
+                status.refreshClosuresDelayed()
+            }
         }
     }
 
@@ -110,6 +115,7 @@ fun ControlScreen(vm: LinkViewModel, status: StatusViewModel) {
     val climateOn = snap?.climateOn
     val charging = snap?.chargingState
     val sentryOn = snap?.sentryOn
+    val sentryFresh = snap?.sentryIsFresh() == true
     val hvacAuto = snap?.hvacAuto
     val fanLevel = snap?.fanLevel
     val notPlugged = charging == "未连接" || charging == "无电源"
@@ -431,15 +437,16 @@ fun ControlScreen(vm: LinkViewModel, status: StatusViewModel) {
 
         CollapsibleSection(
             "驻车安全",
-            sentrySummary(sentryOn),
-            // 哨兵状态来自车机（要会话才答）。展开时还读不到，就按他的这次关注补一轮读取。
-            onExpand = { if (sentryOn == null) status.refresh(force = true) },
+            sentrySummary(sentryOn, sentryFresh),
+            // 哨兵状态来自车机（要会话才答），而且不是每轮都轮到。null 或已过期都补读：
+            // 旧值曾经会被别的类的成功读"续命"，显示得像新鲜值。
+            onExpand = { if (sentryOn == null || !sentryFresh) status.refresh(force = true) },
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Tile(
                     "哨兵开",
-                    gate(needPark = true, stateReason = when (sentryOn) {
-                        true -> "哨兵已开启"
+                    gate(needPark = true, stateReason = when {
+                        sentryOn == true && sentryFresh -> "哨兵已开启"
                         else -> null
                     }),
                     { vm.sentry(true) },
@@ -448,8 +455,8 @@ fun ControlScreen(vm: LinkViewModel, status: StatusViewModel) {
                 )
                 Tile(
                     "哨兵关",
-                    gate(needPark = true, stateReason = when (sentryOn) {
-                        false -> "哨兵已关闭"
+                    gate(needPark = true, stateReason = when {
+                        sentryOn == false && sentryFresh -> "哨兵已关闭"
                         else -> null
                     }),
                     { vm.sentry(false) },
@@ -731,10 +738,11 @@ private fun climateSummary(on: Boolean?, driver: Float?, inside: Float?, auto: B
 private fun chargeSummary(state: String?, limit: Int?): String =
     (state ?: "状态未知") + (limit?.let { " · 上限 $it%" } ?: "")
 
-private fun sentrySummary(on: Boolean?): String = when (on) {
-    null -> "哨兵状态未知"
-    true -> "哨兵开启"
-    false -> "哨兵关闭"
+private fun sentrySummary(on: Boolean?, fresh: Boolean): String = when {
+    on == null -> "哨兵状态未知"
+    // 旧值如实标注读取时间：哨兵不是每轮都轮到，没有这个标注，几小时前的旧值看着像新鲜值。
+    !fresh -> "哨兵${if (on) "开启" else "关闭"}（读数较旧，展开重读）"
+    else -> "哨兵${if (on) "开启" else "关闭"}"
 }
 
 /** 顶部状态胶囊：一眼看到车辆现在是什么样，按钮为什么可用或不可用。 */
