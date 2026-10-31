@@ -260,8 +260,11 @@ keyPassword=...
   plus the developer-mode heading), `WeatherService.kt` (request User-Agent),
   `promo/index.html` (header and footer versions, both download buttons, the release note and
   the settings mock inside the simulator), the `README.md` badges, and
-  `scratch/xhs_template.html` (the promo cards). After touching `promo/`, copy it to `dist/`
-  and republish the site.
+  `scratch/build_xhs.mjs` (the promo cards). After touching `promo/`, copy it to `dist/`
+  and republish the site. Button labels come in two spellings — one says `v0.0.4`, another has
+  historically been the bare `0.0.3` — so a `v0.0.x`-only replace misses the second. Re-scan
+  per occurrence (not per line) for a bare `0.0.x` without a leading `v`; the version inside the
+  file name `T-Dash-0.0.x.apk` is correct and is not a miss.
 
 ### Protocol implementation and tests
 

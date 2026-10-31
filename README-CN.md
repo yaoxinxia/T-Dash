@@ -204,7 +204,10 @@ keyPassword=...
 - `versionCode` / `versionName` 在 `app/build.gradle.kts`。版本文案另有硬编码，发版时一起改：
   `SettingsScreen.kt`（「关于」的版本行 + 开发者模式标题）、`WeatherService.kt`（请求 UA）、
   `promo/index.html`（页头与页脚版本、两处下载按钮、Release 说明、模拟器里的设置页示意）、
-  `README.md` 徽章、`scratch/xhs_template.html`（小红书卡）。promo 改完要同步 `dist/` 并重新发布站点。
+  `README.md` 徽章、`scratch/build_xhs.mjs`（小红书卡）。promo 改完要同步 `dist/` 并重新发布站点。
+  **注意按钮文字有两种写法**：一处是「下载 APK · v0.0.4」，另一处历史上写成不带 `v` 的「下载 APK · 0.0.3」——
+  只替换 `v0.0.x` 会漏掉后者。批量替换后要按"出现次数"而不是"行"复查裸版本号 `0.0.x` 前面没有 `v`
+  （文件名 `T-Dash-0.0.x.apk` 里的裸版本号是正确的，不算漏）。
 
 ### 协议实现与测试
 
