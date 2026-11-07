@@ -256,12 +256,12 @@ keyPassword=...
 - Without that file the `release` build simply carries no signing config and produces an
   unsigned APK; use `assembleDebug` for day-to-day work.
 - `versionCode` / `versionName` live in `app/build.gradle.kts`. Version text is hardcoded in
-  more places, and a release updates all of them: `SettingsScreen.kt` (the About version line
-  plus the developer-mode heading), `WeatherService.kt` (request User-Agent),
+  more places, and a release updates all of them: `SettingsScreen.kt` (the two About version
+  lines), `WeatherService.kt` (request User-Agent),
   `promo/index.html` (header and footer versions, both download buttons, the release note and
   the settings mock inside the simulator), the `README.md` badges, and
   `scratch/build_xhs.mjs` (the promo cards). After touching `promo/`, copy it to `dist/`
-  and republish the site. Button labels come in two spellings — one says `v0.0.4`, another has
+  and republish the site. Button labels come in two spellings — one says `v0.0.5`, another has
   historically been the bare `0.0.3` — so a `v0.0.x`-only replace misses the second. Re-scan
   per occurrence (not per line) for a bare `0.0.x` without a leading `v`; the version inside the
   file name `T-Dash-0.0.x.apk` is correct and is not a miss.

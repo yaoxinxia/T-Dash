@@ -336,7 +336,7 @@ button.pill{font-family:inherit;cursor:pointer;align-self:flex-start}
 }
 .cl-date{font-size:13px;color:var(--mid);letter-spacing:1px;margin-top:2px}
 .cl-weather{font-size:12px;color:var(--low);letter-spacing:.4px;margin-top:3px}
-/* 行车版面右上角「时间+天气」：与 App v0.0.4 同步——从一列小灰字改成横向胶囊（时间加大、细分隔线、半透明底+细边），压在轨迹和天空上都读得清 */
+/* 行车版面右上角「时间+天气」：与 App v0.0.5 同步——从一列小灰字改成横向胶囊（时间加大、细分隔线、半透明底+细边），压在轨迹和天空上都读得清 */
 .cl-mini{
   position:absolute;top:12px;right:14px;z-index:3;
   display:flex;align-items:center;gap:8px;
@@ -964,7 +964,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <span class="mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="#3E6AE1"/><g transform="translate(12 12.6) scale(0.3) translate(-54 -55)"><path fill="#FFFFFF" d="M54,30 L78,42 L54,54 L30,42 Z"/><path fill="#FFFFFF" d="M38,50 L54,58 L70,50 L70,60 L54,68 L38,60 Z"/><path fill="#FFFFFF" d="M42,66 L54,72 L66,66 L66,74 L54,80 L42,74 Z"/></g></svg>
       </span>
-      T-Dash <small>v0.0.4</small><em class="tag">开源免费的 Tesla 仪表盘 App</em>
+      T-Dash <small>v0.0.5</small><em class="tag">开源免费的 Tesla 仪表盘 App</em>
     </div>
     <nav class="nav-links" aria-label="页面导航">
       <a href="#screens">功能</a>
@@ -994,7 +994,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
           <span class="chip cyan"><i></i>Apache-2.0 开源</span>
         </div>
         <div class="cta">
-          <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.4/T-Dash-0.0.4.apk" target="_blank" rel="noopener noreferrer">下载 APK · v0.0.4 <span aria-hidden="true">↓</span></a>
+          <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.5/T-Dash-0.0.5.apk" target="_blank" rel="noopener noreferrer">下载 APK · v0.0.5 <span aria-hidden="true">↓</span></a>
           <a class="btn btn-ghost" href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">GitHub 仓库</a>
         </div>
         <p class="hero-note">手机在演示一段完整行程：P → D → 加速 → 减速 → P，六项读数同步推进；界面按当前 Compose 排版重绘。</p>
@@ -2254,7 +2254,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                       </div>
                     </div>
 
-                    <div class="slabel">连接车辆<small>纯蓝牙直连 · 日常（钥匙已入库）</small></div>
+                    <div class="slabel">车辆与连接<small>纯蓝牙直连 · 日常</small></div>
                     <div class="set-pills">
                       <span class="pill t-good">链路 已连接</span>
                       <span class="pill t-good">钥匙 已配对</span>
@@ -2263,25 +2263,25 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
 
                     <div class="coll">
                       <button type="button" class="coll-h" aria-expanded="false">
-                        <div><b>连接车辆 · 日常</b><span>钥匙已入库 · 打开 app 自动连接，平时不用动这里</span></div>
+                        <div><b>连接与配对</b><span>VIN 与扫描连接 · 打开 app 自动完成，平时不用动这里</span></div>
                         <i>▸</i>
                       </button>
                       <div class="coll-b">
                         <div class="panel">
-                          <div class="panel-h"><div><b>VIN</b><span>17 位，见车辆铭牌或行驶证</span></div></div>
+                          <div class="panel-h"><div><b>VIN 与链路</b><span>17 位，见车辆铭牌或行驶证；平时打开 app 自动连接，这里用于首次配置与手动补救。</span></div></div>
                           <div class="inp"><span>5YJ3E1EA7KFSAMPLE</span></div>
                           <div class="tile-row">
                             <div class="tile sel static"><span class="tx"><b>扫描并连接</b></span><span class="dot"></span></div>
                             <div class="tile plain fixed96 static"><span class="tx"><b>断开</b></span><span class="dot"></span></div>
                           </div>
+                          <div class="note-inline">钥匙已入库：配对只需一次（发配对请求 → 刷 NFC 卡 → 车机确认），之后每次连接自动完成。</div>
                         </div>
-                        <div class="tile tone-warn static"><span class="tx"><b>重看首次引导（清掉配对记录）</b><em>只重置界面引导状态：不动本机钥匙，也不会通知车辆</em></span><span class="dot"></span></div>
                       </div>
                     </div>
 
                     <div class="coll">
                       <button type="button" class="coll-h" aria-expanded="false">
-                        <div><b>连接兜底</b><span>默认扫描发现 · 无需配置</span></div>
+                        <div><b>连接兜底 · 扫不到车时</b><span>默认按广播名扫描发现 · 无需配置</span></div>
                         <i>▸</i>
                       </button>
                       <div class="coll-b">
@@ -2301,14 +2301,15 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                       </div>
                     </div>
 
+                    <div class="slabel">地图与天气<small>可选 · 不参与车辆链路</small></div>
                     <div class="coll">
                       <button type="button" class="coll-h" aria-expanded="false">
-                        <div><b>高德 Key（通用）</b><span>已配置 · 尾号 …8F2A · 天气开</span></div>
+                        <div><b>高德 Key 与仪表天气</b><span>已配 Key 尾号 …8F2A · 天气开</span></div>
                         <i>▸</i>
                       </button>
                       <div class="coll-b">
                         <div class="panel">
-                          <div class="panel-h"><div><b>高德开放平台 Key</b><span>全 app 通用的一项配置，影响两处：「工具 → 事故处理 → 我在哪」的逆地理编码（把 GPS 坐标翻译成中文地址），以及可选的仪表天气。统计页轨迹的高德底图走公开栅瓦，不需要 Key；车辆数据全程蓝牙直连，与这个 Key 无关。</span></div></div>
+                          <div class="panel-h"><div><b>高德开放平台 Key</b><span>一处配置、两处生效：「工具 → 事故处理 → 我在哪」把 GPS 坐标翻成中文地址，仪表天气取同一把 Key。统计页轨迹底图走公开栅瓦，不需要 Key；车辆数据全程蓝牙直连，与这个 Key 无关。</span></div></div>
                           <div class="inp"><span>a1b2c3d4e5f60718293a4b5c6d7e8f2a</span></div>
                           <div class="note-inline">只要「Key」那一串，不需要「安全密钥」（那是 JS API 用的）。高德控制台「我的应用」里这把 Key 的绑定服务必须显示 Web服务；显示 Web端 / Android平台 的会报 10009 平台不匹配；不要勾选数字签名。</div>
                           <div class="tile-row">
@@ -2320,9 +2321,10 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                       </div>
                     </div>
 
+                    <div class="slabel">仪表显示<small>即时生效</small></div>
                     <div class="coll open" id="collBands">
                       <button type="button" class="coll-h" aria-expanded="true">
-                        <div><b>仪表速度分档</b><span id="bandsSummary">66 / 88 / 110 / 132 km/h · 五段配色</span></div>
+                        <div><b>速度分档与配色</b><span id="bandsSummary">66 / 88 / 110 / 132 km/h · 五段配色</span></div>
                         <i>▾</i>
                       </button>
                       <div class="coll-b">
@@ -2337,6 +2339,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                       </div>
                     </div>
 
+                    <div class="slabel">本机数据<small>只在取证 PDF 用到</small></div>
                     <div class="coll">
                       <button type="button" class="coll-h" aria-expanded="false">
                         <div><b>个人信息（事故取证用）</b><span>张三 沪A·12345 138… · 证件照 2/2</span></div>
@@ -2373,9 +2376,10 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
                       </div>
                     </div>
 
+                    <div class="slabel">修复与高级<small>都只动本机</small></div>
                     <div class="coll">
                       <button type="button" class="coll-h" aria-expanded="false">
-                        <div><b>本机钥匙与缓存</b><span>指纹尾 …7C4E · P-256</span></div>
+                        <div><b>本机钥匙与会话缓存</b><span>指纹尾 …7C4E · P-256</span></div>
                         <i>▸</i>
                       </button>
                       <div class="coll-b">
@@ -2395,23 +2399,30 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
 
                     <div class="coll">
                       <button type="button" class="coll-h" aria-expanded="false">
-                        <div><b>关于与开发者</b><span>v0.0.4 · 开发者模式关</span></div>
+                        <div><b>引导与开发者模式</b><span>开发者模式已关闭</span></div>
                         <i>▸</i>
                       </button>
                       <div class="coll-b">
                         <div class="panel">
-                          <div class="panel-h"><div><b>开发者模式</b><span>打开后底栏显示「调试」页（链路自检、分级日志）。日常使用无需打开。</span></div></div>
+                          <div class="panel-h"><div><b>重看首次引导</b><span>只重置界面引导状态：不动本机钥匙，也不会通知车辆；首次引导卡与配对卡会恢复显示。</span></div></div>
+                          <div class="tile tone-warn static"><span class="tx"><b>重看首次引导</b></span><span class="dot"></span></div>
+                        </div>
+                        <div class="panel">
+                          <div class="panel-h"><div><b>开发者模式</b><span>打开后底栏多一页「调试」：链路自检与分级日志。日常使用不需要。</span></div></div>
                           <div class="kv" style="align-items:center"><span>已关闭</span><span class="switch"></span></div>
                         </div>
-                        <div class="slabel">关于</div>
-                        <div class="panel tight">
-                          <div class="kv"><span>版本</span><b>T-Dash v0.0.4</b></div>
-                          <div class="kv"><span>通道</span><b>蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）</b></div>
-                          <div class="kv"><span>云端</span><b>无：无账号登录、无遥测服务器；联网只用于地图底图、定位解析，以及可选的高德天气</b></div>
-                          <div class="kv"><span>本机数据</span><b>私钥、轨迹、取证照片与个人信息只存本机</b></div>
-                          <div class="kv"><span>远程</span><b>人不在车旁时需要 Fleet API，当前版本未启用</b></div>
-                        </div>
                       </div>
+                    </div>
+
+                    <div class="slabel">关于</div>
+                    <div class="panel tight">
+                      <div class="kv"><span>版本</span><b>T-Dash v0.0.5</b></div>
+                      <div class="kv"><span>项目性质</span><b>非官方开源项目，与 Tesla, Inc. 无隶属关系，也不接入任何官方账号体系</b></div>
+                      <div class="kv"><span>担保</span><b>按「原样」提供，不提供任何担保；仅供你本人拥有或有权操作的车辆使用</b></div>
+                      <div class="kv"><span>通道</span><b>蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）</b></div>
+                      <div class="kv"><span>云端</span><b>无：无账号登录、无遥测服务器；联网只用于地图底图、定位解析，以及可选的高德天气</b></div>
+                      <div class="kv"><span>本机数据</span><b>私钥、轨迹、取证照片与个人信息只存本机</b></div>
+                      <div class="kv"><span>远程</span><b>人不在车旁时需要 Fleet API，当前版本未启用</b></div>
                     </div>
                   </div>
                 </div>
@@ -2760,10 +2771,10 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       </div>
       <p class="note reveal"><b>成本清单：</b>一台支持蓝牙的安卓手机，其余全免。钥匙是你自己的 NFC 卡，公钥只存在你手机里；项目与 Tesla 无隶属，也不接入任何官方账号体系。</p>
       <div class="cta reveal">
-        <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.4/T-Dash-0.0.4.apk" target="_blank" rel="noopener noreferrer">下载 APK · v0.0.4 <span aria-hidden="true">↓</span></a>
+        <a class="btn btn-primary" href="https://github.com/yaoxinxia/T-Dash/releases/download/v0.0.5/T-Dash-0.0.5.apk" target="_blank" rel="noopener noreferrer">下载 APK · v0.0.5 <span aria-hidden="true">↓</span></a>
         <a class="btn btn-ghost" href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">GitHub 仓库</a>
       </div>
-      <p class="note reveal"><b>Release：</b><a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.4" target="_blank" rel="noopener noreferrer">github.com/yaoxinxia/T-Dash/releases/tag/v0.0.4</a><br>APK 53 MB · Android 10 及以上 · 需允许安装未知来源应用；正式签名，可从 v0.0.1 / v0.0.2 / v0.0.3 覆盖升级（配对保留）；与更早的 debug 版不能覆盖，需先卸载。</p>
+      <p class="note reveal"><b>Release：</b><a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.5" target="_blank" rel="noopener noreferrer">github.com/yaoxinxia/T-Dash/releases/tag/v0.0.5</a><br>APK 53 MB · Android 10 及以上 · 需允许安装未知来源应用；正式签名，可从 v0.0.1 / v0.0.2 / v0.0.3 / v0.0.4 覆盖升级（配对保留）；与更早的 debug 版不能覆盖，需先卸载。</p>
     </section>
   </div>
 
@@ -2862,7 +2873,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
         <span class="mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" fill="#3E6AE1"/><g transform="translate(12 12.6) scale(0.3) translate(-54 -55)"><path fill="#FFFFFF" d="M54,30 L78,42 L54,54 L30,42 Z"/><path fill="#FFFFFF" d="M38,50 L54,58 L70,50 L70,60 L54,68 L38,60 Z"/><path fill="#FFFFFF" d="M42,66 L54,72 L66,66 L66,74 L54,80 L42,74 Z"/></g></svg>
         </span>
-        T-Dash <small>v0.0.4</small>
+        T-Dash <small>v0.0.5</small>
       </div>
       <p style="margin-top:12px">T-Dash 是纯蓝牙的 Tesla 安卓伴侣。协议层来自 teslamotors/vehicle-command 的公开定义，本项目与其无隶属关系，也与 Tesla, Inc. 无关。仅供你本人拥有或有权操作的车辆使用，不得用于未经授权访问他人车辆。</p>
     </div>
@@ -2871,7 +2882,7 @@ footer{border-top:1px solid var(--hairline-soft);padding:34px 0 46px}
       <b>地图</b> 高德瓦片 · 另可选高德天气<br>
       <b>平台</b> Android · Kotlin / Compose<br>
       <b>GitHub</b> <a href="https://github.com/yaoxinxia/T-Dash" target="_blank" rel="noopener noreferrer">yaoxinxia/T-Dash</a><br>
-      <b>Release</b> <a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.4" target="_blank" rel="noopener noreferrer">v0.0.4 · APK</a>
+      <b>Release</b> <a href="https://github.com/yaoxinxia/T-Dash/releases/tag/v0.0.5" target="_blank" rel="noopener noreferrer">v0.0.5 · APK</a>
     </div>
   </div>
 </footer>

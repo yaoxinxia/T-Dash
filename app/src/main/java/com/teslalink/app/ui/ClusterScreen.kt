@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -57,12 +58,14 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teslalink.app.ui.components.ArcGauge
+import com.teslalink.app.ui.components.EngineGlyph
 import com.teslalink.app.ui.components.RingGauge
 import com.teslalink.app.ui.theme.TL
 import com.teslalink.app.vm.Trip
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -91,6 +94,8 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
     val phoneHeading by dashboard.phoneHeading.collectAsState()
     val speedBands by dashboard.speedBands.collectAsState()
     val weather by dashboard.weather.collectAsState()
+    val engineSoundOn by dashboard.engineSoundOn.collectAsState()
+    val engineLevel by dashboard.engineLevel.collectAsState()
 
     // 「接续上一段」：上一段行程结束在 1 小时内才出现（服务区休息场景）。
     // 30 秒心跳只为让窗口到点后自己消失；行程收尾（trips 变化）会立刻重算。
@@ -138,6 +143,9 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
     // 第一次读到档位后由档位接管；行车中断联也停在这套版面上等重连。
     var parked by remember { mutableStateOf(true) }
     LaunchedEffect(state.shift) { state.shift?.let { parked = it == "P" } }
+    // 导航条在不在：链路正常 + 车速数据新鲜 + 车机确实还在导航（车机撤掉路线字段后 1.5 秒即撤下）。
+    val navVisible = !parked && !notConnected && !stale &&
+        com.teslalink.app.vm.navIsFresh(state.navAtMs, System.currentTimeMillis())
 
     Box(
         Modifier
@@ -184,7 +192,7 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 ParkedInfo(
                                     state.soc, state.outsideTemp, state.driverTemp, state.insideTemp,
-                                    state.climateOn, state.charging, state.chargePowerKw,
+                                    state.climateOn, state.charging, state.chargePowerKw, state.rangeKm,
                                     weather = weather,
                                     vertical = true, visible = parked,
                                     modifier = Modifier.fillMaxWidth(0.92f),
@@ -222,7 +230,7 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
                             )
                             ParkedInfo(
                                 state.soc, state.outsideTemp, state.driverTemp, state.insideTemp,
-                                state.climateOn, state.charging, state.chargePowerKw,
+                                state.climateOn, state.charging, state.chargePowerKw, state.rangeKm,
                                 weather = weather,
                                 vertical = false, visible = parked,
                                 modifier = Modifier.align(Alignment.CenterStart).fillMaxWidth(0.56f),
@@ -244,7 +252,20 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
                                 modifier = Modifier.weight(1.22f),
                             )
                         }
-                        Spacer(Modifier.weight(0.22f))
+                        // 竖屏最下面那条空带：功率/行程行下方、指示条上方，仪表自己什么都没放。
+                        // 导航条摆这儿——竖屏顶部中间是「时间+天气」胶囊的地盘，摆那儿必重叠。
+                        Box(
+                            Modifier
+                                .weight(0.22f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            NavStrip(
+                                state,
+                                visible = navVisible,
+                                modifier = Modifier.padding(horizontal = 10.dp),
+                            )
+                        }
                     }
                 }
 
@@ -258,6 +279,34 @@ fun ClusterScreen(dashboard: DashboardViewModel, status: StatusViewModel, link: 
                         .align(Alignment.TopEnd)
                         .padding(top = 12.dp, end = if (landscape) 18.dp else 14.dp),
                 )
+
+                // 车机导航行程：只在链路正常、车速数据新鲜、且车机确实还在导航时出现。
+                // 横屏放顶部中间（那里是唯一空位）；竖屏顶部中间是「时间+天气」胶囊的地盘，
+                // 竖屏改放到最下面那条空带（见竖屏分支），两处互不影响。
+                if (landscape) {
+                    NavStrip(
+                        state,
+                        visible = navVisible,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = if (resumeVisible) 54.dp else 10.dp),
+                    )
+                }
+
+                // 玩具：引擎声浪开着时，行车版面左上角挂一个会抖的发动机标。
+                // 只在行车版面出现——驻车版面左槽是时钟+三张卡，任何角落都会压到它们；
+                // 关掉开关时这一整块连组合都不进，仪表布局一个像素都不动。
+                if (engineSoundOn && !parked) {
+                    EngineToyBadge(
+                        level = engineLevel,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(
+                                top = if (resumeVisible) 54.dp else 12.dp,
+                                start = if (landscape) 18.dp else 14.dp,
+                            ),
+                    )
+                }
 
                 // 断开时不显示：那条连接提示已经占了这一行，而且断开后 updatedAtMs 清零、
                 // stale 恒为真，两个提示会叠在同一位置。
@@ -764,6 +813,155 @@ private fun DriveMiniClock(
 }
 
 /**
+ * 行车版面的导航行程条：车机自己在导航时，把「目的地 · 还要几分钟 · 还剩几公里 · 到车电量」
+ * 挂在顶部中间。数据全在 DRIVE 帧里（车速道 250ms 一次本来就在读），**不额外发任何蓝牙请求**。
+ *
+ * 为什么放顶部中间：行车时那是唯一的空位——左上给了「接续上一段」和引擎角标，右上是时间+天气
+ * 胶囊，中间和两侧是速度环/功率圈/行程卡这些主角。横幅（无新数据、未连接）与它互斥且优先，
+ * 所以这条只在链路正常、数据新鲜时才出现；车机不在导航时整条组合都不进，一个像素都不占。
+ */
+@Composable
+private fun NavStrip(
+    state: com.teslalink.app.vm.DashboardViewModel.ClusterState,
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        label = "navStrip",
+    )
+    if (alpha <= 0.01f) return
+    Row(
+        modifier
+            .alpha(alpha)
+            .clip(CircleShape)
+            .background(TL.raised.copy(alpha = 0.6f))
+            .border(1.dp, TL.hairlineSoft, CircleShape)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // 导航箭头：自己画的一枚小菱形针，不用任何车厂标识。
+        Canvas(Modifier.size(13.dp)) {
+            val w = size.width
+            val h = size.height
+            val p = androidx.compose.ui.graphics.Path().apply {
+                moveTo(w * 0.5f, 0f)
+                lineTo(w, h * 0.78f)
+                lineTo(w * 0.5f, h * 0.58f)
+                lineTo(0f, h * 0.78f)
+                close()
+            }
+            drawPath(p, TL.accent)
+        }
+        state.navDestination?.let { dest ->
+            Text(
+                dest,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.W600,
+                color = TL.textHi,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                // 竖屏比横屏窄：让目的地这一项可压缩（weight + fill=false），
+                // 窄屏时它先被截成省略号，而不是把整条挤出屏幕。
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .widthIn(max = 190.dp),
+            )
+            StripRule()
+        }
+        navEtaText(state.navMinutes, state.navKmLeft)?.let {
+            Text(
+                it,
+                style = TextStyle(
+                    fontSize = 13.sp,
+                    letterSpacing = 0.3.sp,
+                    fontFeatureSettings = "tnum",
+                    color = TL.textMid,
+                ),
+                maxLines = 1,
+            )
+        }
+        // 到车电量是这条里最该被看见的数字：低于 15% 转琥珀色，只报事实、不做"够不够"的判断。
+        state.navArrivalSoc?.let { soc ->
+            StripRule()
+            Text(
+                "到车 $soc%",
+                style = TextStyle(
+                    fontSize = 13.sp,
+                    letterSpacing = 0.3.sp,
+                    fontFeatureSettings = "tnum",
+                    color = if (soc < 15) TL.warn else TL.textMid,
+                ),
+                maxLines = 1,
+            )
+        }
+        navDelayText(state.navDelayMin)?.let {
+            Text(it, fontSize = 12.sp, color = TL.warn, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun StripRule() {
+    Box(
+        Modifier
+            .width(1.dp)
+            .height(14.dp)
+            .background(TL.hairlineSoft),
+    )
+}
+
+/** 「还要几分钟 · 还剩几公里」。两个数都没给就整段不显示。 */
+internal fun navEtaText(minutes: Float?, kmLeft: Float?): String? {
+    val time = minutes?.let { m ->
+        val t = m.roundToInt()
+        if (t < 60) "$t 分" else "${t / 60} 时 ${"%02d".format(t % 60)} 分"
+    }
+    val dist = kmLeft?.let { if (it < 10f) "%.1f km".format(it) else "%.0f km".format(it) }
+    return listOfNotNull(time, dist).joinToString(" · ").ifEmpty { null }
+}
+
+/** 拥堵多花的时间：0 或负数说明"没额外堵车"，不占地方。 */
+internal fun navDelayText(delayMin: Float?): String? =
+    delayMin?.takeIf { it > 0.5f }?.let { "堵 ${it.roundToInt()} 分" }
+
+/**
+ * 引擎声浪的仪表角标：一个发动机器形的小灯标，跟着实时功率抖。
+ * 抖动只走 graphicsLayer——平移/旋转在渲染线程算，不触发重组；
+ * 车速道 250–500ms 一次的功率更新只是改一个 0..1 的系数。
+ * 工具页的「试用动画」复用同一个组件，看到的抖动就是行车时真正的抖动。
+ */
+@Composable
+internal fun EngineToyBadge(level: Float, modifier: Modifier = Modifier, size: androidx.compose.ui.unit.Dp = 30.dp) {
+    val phase = rememberInfiniteTransition(label = "engine-badge").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(90, easing = androidx.compose.animation.core.LinearEasing)),
+        label = "engine-badge-phase",
+    )
+    val shake = com.teslalink.app.audio.engineShakeFor(level)
+    Box(
+        modifier
+            .size(size)
+            .graphicsLayer {
+                val w = 2f * Math.PI.toFloat() * phase.value
+                translationX = kotlin.math.sin(w.toDouble()).toFloat() * shake.shiftDp.dp.toPx()
+                translationY = kotlin.math.sin((w * 1.7 + 0.8).toDouble()).toFloat() * shake.shiftDp.dp.toPx() * 0.6f
+                rotationZ = kotlin.math.sin((w * 0.8).toDouble()).toFloat() * shake.rotateDeg
+                alpha = 0.6f + 0.4f * level
+            }
+            .clip(RoundedCornerShape(percent = 30))
+            .background(TL.raised.copy(alpha = 0.72f))
+            .border(1.dp, TL.hairlineSoft, RoundedCornerShape(percent = 30)),
+        contentAlignment = Alignment.Center,
+    ) {
+        EngineGlyph(if (level > 0.05f) TL.warn else TL.textMid, boxSize = size * 0.66f)
+    }
+}
+
+/**
  * 驻车版面：时间为主（大时钟 + 日期），下面三张卡——电量 / 车外 / 空调。
  * visible=false 时整块撤出组合（时钟也不走表），alpha 淡入淡出与速度环的滑移动画同步。
  * 数据与慢车道同源：行驶中不发 CHARGE/CLIMATE，卡片行车中本来也不可见。
@@ -778,6 +976,7 @@ private fun ParkedInfo(
     climateOn: Boolean?,
     charging: Boolean,
     chargePowerKw: Int?,
+    rangeKm: Float?,
     weather: com.teslalink.app.weather.WeatherNow?,
     vertical: Boolean,
     visible: Boolean,
@@ -808,7 +1007,13 @@ private fun ParkedInfo(
         Triple(
             "电量%",
             soc?.let { "$it" } ?: "--",
-            if (charging) "充电中" + (chargePowerKw?.let { " · ${it}kW" } ?: "") else " ",
+            // 注脚位：充电中优先报功率，否则报车机算的续航（ideal 口径）。都没有就留空格占高，
+            // 三张卡保持等高。
+            when {
+                charging -> "充电中" + (chargePowerKw?.let { " · ${it}kW" } ?: "")
+                rangeKm != null && rangeKm > 0f -> "续航 ${rangeKm.roundToInt()}km"
+                else -> " "
+            },
         ),
         Triple("车外°C", outsideTemp?.let { "%.0f".format(it) } ?: "--", " "),
         Triple(

@@ -12,7 +12,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -81,8 +83,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 设置：连接（VIN/扫描/配对）、兜底参数、本机钥匙、会话缓存、开发者模式。
- * 没有独立的「车辆」页——连接是打开 app 自动做的，这里负责配置与补救。
+ * 设置页分五组，从上到下按"用得最多 → 最少碰"排：
+ * 车辆与连接（状态胶囊 + 连接配对 + 扫不到车的兜底）· 地图与天气 · 仪表显示 ·
+ * 本机数据（事故取证）· 修复与高级（换钥匙 / 清会话缓存 / 重看引导 / 开发者模式，
+ * 三个会改本机状态的危险操作都收在这里，平时看不见）。
+ * 每组是 SectionLabel + 折叠区；折叠区内部用 SettingItem（不画框）+ ItemRule，
+ * 不再套 Panel——框里套框、标题重复就是这页之前显乱的原因。
+ * 没有独立的「车辆」页：连接是打开 app 自动做的，这里负责配置与补救。
  */
 @Composable
 fun SettingsScreen(
@@ -103,22 +110,18 @@ fun SettingsScreen(
     var macNote by remember { mutableStateOf<Pair<Tone, String>?>(null) }
     var nameNote by remember { mutableStateOf<Pair<Tone, String>?>(null) }
     var amapNote by remember { mutableStateOf<Pair<Tone, String>?>(null) }
+    var weatherNote by remember { mutableStateOf<Pair<Tone, String>?>(null) }
     var rotateNote by remember { mutableStateOf<Pair<Tone, String>?>(null) }
     var cacheNote by remember { mutableStateOf<Pair<Tone, String>?>(null) }
 
-    val vin by link.vin.collectAsState()
     val state by link.state.collectAsState()
     val keyPaired by link.keyPaired.collectAsState()
     val mcuReady by link.mcuReady.collectAsState()
     val autoReconnecting by link.autoReconnecting.collectAsState()
-    val pairing by link.pairingPhase.collectAsState()
-    val ack by link.pairingAck.collectAsState()
     val busy by link.busy.collectAsState()
     val everConnected by link.everConnected.collectAsState()
     val keyPairedEver by link.keyPairedEver.collectAsState()
     val devMode by link.devMode.collectAsState()
-
-    val connected = state == VehicleConnection.State.CONNECTED
 
     // 设置页的三种模式由"识别过的状态数据"驱动：首次 / 待配对 / 日常。
     val stage = when {
@@ -143,7 +146,7 @@ fun SettingsScreen(
     ) {
         PageHeader(
             "设置",
-            "连接、钥匙与本机数据；全部留在本机",
+            "车辆与连接 · 地图与天气 · 仪表显示 · 本机数据 · 修复与高级；全部留在本机",
             trailing = {
                 if (busy) {
                     CircularProgressIndicator(
@@ -155,22 +158,15 @@ fun SettingsScreen(
             },
         )
 
-        when (stage) {
-            SetupStage.NEVER_CONNECTED -> FirstRunGuide()
-            SetupStage.CONNECTED_NOT_PAIRED -> HintBar(
-                "链路已经通了，但这把公钥还没被车辆认下：完成下方「钥匙配对」（刷 NFC 卡 + 车机确认）后，" +
-                    "以后打开 app 就会直接进仪表页。",
-                Tone.Warn,
-            )
-            SetupStage.PAIRED -> Unit
-        }
+        // 只在真·首次出现：一旦识别过车辆，剩下的信息都在下面各组的摘要行和就地提示里。
+        if (stage == SetupStage.NEVER_CONNECTED) FirstRunGuide()
 
         SectionLabel(
-            "连接车辆",
+            "车辆与连接",
             "纯蓝牙直连 · " + when (stage) {
-                SetupStage.NEVER_CONNECTED -> "首次配置"
-                SetupStage.CONNECTED_NOT_PAIRED -> "还差钥匙配对"
-                SetupStage.PAIRED -> "日常（钥匙已入库）"
+                SetupStage.NEVER_CONNECTED -> "首次"
+                SetupStage.CONNECTED_NOT_PAIRED -> "待配对"
+                SetupStage.PAIRED -> "日常"
             },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -198,115 +194,107 @@ fun SettingsScreen(
             Pill("车机 ${if (mcuReady) "在线" else "未就绪"}", if (mcuReady) Tone.Good else Tone.Neutral)
         }
 
-        when (stage) {
-            // 日常模式：钥匙已入库，把整套连接/配对操作收进折叠，页面第一眼只剩状态。
-            SetupStage.PAIRED -> CollapsibleSection(
-                "连接车辆 · 日常",
-                "钥匙已入库 · 打开 app 自动连接，平时不用动这里",
-            ) {
-                ConnectionControls(link)
-                ActionTile(
-                    "重看首次引导（清掉配对记录）",
-                    onClick = {
-                        link.resetOnboarding()
-                        resetNote = Tone.Good to
-                            "已重置界面引导状态：本机钥匙没动，也没通知车辆；首次引导和配对卡已恢复显示"
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    tone = Tone.Warn,
-                    stateLine = "只重置界面引导状态：不动本机钥匙，也不会通知车辆",
-                )
-                resetNote?.let { HintBar(it.second, it.first) }
-            }
-            else -> ConnectionControls(link)
+        // 日常（钥匙已入库）收起：页面第一眼只剩三颗状态胶囊；首次/待配对阶段直接摊开。
+        CollapsibleSection(
+            "连接与配对",
+            when {
+                keyPaired -> "VIN 与扫描连接 · 打开 app 自动完成，平时不用动这里"
+                else -> "还差最后一步：发配对请求 → 刷 NFC 卡 → 车机确认"
+            },
+            initiallyExpanded = stage != SetupStage.PAIRED,
+        ) {
+            ConnectionControls(link)
         }
 
         CollapsibleSection(
-            "连接兜底",
+            "连接兜底 · 扫不到车时",
             when {
                 macInput.isNotBlank() -> "已记住 MAC …" + macInput.takeLast(5)
-                else -> "默认扫描发现 · 无需配置"
+                else -> "默认按广播名扫描发现 · 无需配置"
             },
         ) {
-        Panel(
-            title = "车辆 BLE 地址（MAC）",
-            subtitle = "用 nRF Connect 在车旁看到车辆（名称 S…C）而本 app 扫不到时填写；保存后连接将跳过扫描直接拨号。",
-        ) {
-            OutlinedTextField(
-                value = macInput,
-                onValueChange = { macInput = it },
-                singleLine = true,
-                placeholder = { Text("A0:B1:C2:D3:E4:F5", color = TL.textLow) },
-                textStyle = MaterialTheme.typography.titleMedium.copy(
-                    fontFeatureSettings = "tnum",
-                    color = TL.textHi,
-                ),
-                colors = fieldColors(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(
-                    "保存并使用",
-                    onClick = {
-                        val mac = macInput.trim().uppercase()
-                        if (Regex("^([0-9A-F]{2}:){5}[0-9A-F]{2}$").matches(mac)) {
-                            link.rememberAddress(mac)
-                            macNote = Tone.Good to "已保存车辆地址 $mac，下次连接直接拨号"
-                        } else {
-                            macNote = Tone.Bad to "MAC 格式不正确（应为 XX:XX:XX:XX:XX:XX）"
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    emphasize = true,
-                    tone = Tone.Info,
+            SettingItem(
+                "车辆 BLE 地址（MAC）",
+                "在车旁能看到车辆广播（名称 S…C）但本 app 扫不到时填；保存后连接跳过扫描直接拨号。",
+            ) {
+                OutlinedTextField(
+                    value = macInput,
+                    onValueChange = { macInput = it },
+                    singleLine = true,
+                    placeholder = { Text("A0:B1:C2:D3:E4:F5", color = TL.textLow) },
+                    textStyle = MaterialTheme.typography.titleMedium.copy(
+                        fontFeatureSettings = "tnum",
+                        color = TL.textHi,
+                    ),
+                    colors = fieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                ActionTile(
-                    "清除",
-                    onClick = {
-                        link.forgetAddress()
-                        macInput = ""
-                        macNote = Tone.Good to "已清除车辆地址，下次连接恢复扫描"
-                    },
-                    modifier = Modifier.width(110.dp),
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionTile(
+                        "保存并使用",
+                        onClick = {
+                            val mac = macInput.trim().uppercase()
+                            if (Regex("^([0-9A-F]{2}:){5}[0-9A-F]{2}$").matches(mac)) {
+                                link.rememberAddress(mac)
+                                macNote = Tone.Good to "已保存车辆地址 $mac，下次连接直接拨号"
+                            } else {
+                                macNote = Tone.Bad to "MAC 格式不正确（应为 XX:XX:XX:XX:XX:XX）"
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        emphasize = true,
+                        tone = Tone.Info,
+                    )
+                    ActionTile(
+                        "清除",
+                        onClick = {
+                            link.forgetAddress()
+                            macInput = ""
+                            macNote = Tone.Good to "已清除车辆地址，下次连接恢复扫描"
+                        },
+                        modifier = Modifier.width(110.dp),
+                    )
+                }
+                macNote?.let { HintBar(it.second, it.first) }
             }
-            macNote?.let { HintBar(it.second, it.first) }
+
+            ItemRule()
+
+            SettingItem(
+                "自定义 BLE 广播名",
+                "车辆广播名默认按 VIN 计算（S + SHA1 前 8 字节 + C），与你在 Tesla app 里改的昵称无关。",
+            ) {
+                OutlinedTextField(
+                    value = customName,
+                    onValueChange = { customName = it },
+                    singleLine = true,
+                    placeholder = { Text("例如 Tesla Model 3（留空则不启用）", color = TL.textLow) },
+                    colors = fieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ActionTile(
+                    "保存广播名",
+                    onClick = {
+                        link.setCustomBleName(customName)
+                        nameNote = Tone.Good to "已保存自定义广播名"
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                nameNote?.let { HintBar(it.second, it.first) }
+            }
         }
 
-        Panel(
-            title = "自定义 BLE 广播名",
-            subtitle = "车辆广播名默认按 VIN 计算（S + SHA1 前 8 字节 + C），与你在 Tesla app 里改的昵称无关。",
-        ) {
-            OutlinedTextField(
-                value = customName,
-                onValueChange = { customName = it },
-                singleLine = true,
-                placeholder = { Text("例如 Tesla Model 3（留空则不启用）", color = TL.textLow) },
-                colors = fieldColors(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            ActionTile(
-                "保存广播名",
-                onClick = {
-                    link.setCustomBleName(customName)
-                    nameNote = Tone.Good to "已保存自定义广播名"
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            nameNote?.let { HintBar(it.second, it.first) }
-        }
-        }
+        SectionLabel("地图与天气", "可选 · 不参与车辆链路")
 
         CollapsibleSection(
-            "高德 Key（通用）",
-            (if (amapKey.isBlank()) "未配置 · 地址与天气都不可用"
-            else "已配置 · 尾号 …" + amapKey.takeLast(4) + if (weatherOn) " · 天气开" else ""),
+            "高德 Key 与仪表天气",
+            if (amapKey.isBlank()) "未配置 · 地址与天气都不可用"
+            else "已配 Key 尾号 …" + amapKey.takeLast(4) + if (weatherOn) " · 天气开" else " · 天气关",
         ) {
-            Panel(
-                title = "高德开放平台 Key",
-                subtitle = "全 app 通用的一项配置，影响两处：「工具 → 事故处理 → 我在哪」的逆地理编码" +
-                    "（把 GPS 坐标翻译成中文地址），以及可选的仪表天气。" +
-                    "统计页轨迹的高德底图走公开栅瓦，不需要 Key；车辆数据全程蓝牙直连，与这个 Key 无关。",
+            SettingItem(
+                "高德开放平台 Key",
+                "一处配置、两处生效：「工具 → 事故处理 → 我在哪」把 GPS 坐标翻成中文地址，仪表天气取同一把 Key。" +
+                    "统计页轨迹底图走公开栅瓦，不需要 Key。",
             ) {
                 OutlinedTextField(
                     value = amapKey,
@@ -351,25 +339,22 @@ fun SettingsScreen(
                     )
                 }
                 amapNote?.let { HintBar(it.second, it.first) }
+            }
 
+            ItemRule()
+
+            SettingItem(
+                "仪表显示天气",
+                "用手机最近一次定位查城市再取高德天气，30 分钟一刷；行车中照常取，走手机网络，不发蓝牙请求。" +
+                    "驻车版面在时钟下方，行车版面在右上角「时间+天气」；没 Key、没位置授权或请求失败时整块不显示，不留占位。",
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(
-                        Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(
-                            "仪表显示天气",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TL.textHi,
-                        )
-                        Text(
-                            "用手机最近一次定位查城市，再取高德天气；30 分钟一刷，行车中照常取（走手机网络，不发蓝牙请求）。" +
-                                "驻车版面显示在时钟下方，行车版面显示右上角迷你「时间+天气」。" +
-                                "没有 Key、没给位置权限或请求失败时整块不显示，不会放占位符。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TL.textLow,
-                        )
-                    }
+                    Text(
+                        if (weatherOn) "已开启 · 每 30 分钟刷新" else "已关闭 · 仪表不显示天气",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TL.textMid,
+                        modifier = Modifier.weight(1f),
+                    )
                     Switch(
                         checked = weatherOn,
                         onCheckedChange = { on ->
@@ -377,23 +362,27 @@ fun SettingsScreen(
                             scope.launch {
                                 container.prefs.putString("weather_on", if (on) "1" else null)
                             }
-                            if (on && amapKey.isBlank()) {
-                                amapNote = Tone.Warn to "天气已开启，但还没保存 Key：保存后进入仪表才会请求"
+                            weatherNote = if (on && amapKey.isBlank()) {
+                                Tone.Warn to "天气已开启，但还没保存上面的 Key：存好 Key 后进入仪表才会请求"
+                            } else {
+                                null
                             }
                         },
                     )
                 }
+                weatherNote?.let { HintBar(it.second, it.first) }
             }
         }
 
+        SectionLabel("仪表显示", "即时生效")
+
         CollapsibleSection(
-            "仪表速度分档",
+            "速度分档与配色",
             bands.breaks.joinToString(" / ") + " km/h · 五段配色",
         ) {
-            Panel(
-                title = "速度分级与颜色",
-                subtitle = "车速跨过这些变化点就换颜色，作用在仪表盘的大数字、光晕和下面的阈值条上。" +
-                    "按 km/h 设置，相邻两档至少差 1 km/h；改完立即生效，不用重连。",
+            SettingItem(
+                "变化点（km/h）",
+                "车速跨过这些点就换颜色，同时作用在仪表大数字、光晕和下面的阈值条上；按 km/h 设置，相邻两档至少差 1。",
             ) {
                 bands.breaks.forEachIndexed { i, value ->
                     Row(
@@ -434,13 +423,15 @@ fun SettingsScreen(
                 }
 
                 Text(
-                    "每次 ±1 km/h；相邻两档至少差 1，到边界按钮停住。" +
-                        "仪表上的大数字、光晕、阈值条会一起换到对应颜色。",
+                    "点 ± 每次走 1 km/h；到边界就停住，不会把相邻档一起推走。",
                     style = MaterialTheme.typography.labelSmall,
                     color = TL.textLow,
                 )
+            }
 
-                SectionLabel("每段颜色", "暗底高对比色板")
+            ItemRule()
+
+            SettingItem("每段颜色", "五段各选一种；暗底高对比色板") {
                 for (i in 0..4) {
                     Row(
                         Modifier.fillMaxWidth(),
@@ -487,103 +478,125 @@ fun SettingsScreen(
                         }
                     }
                 }
-
-                ActionTile(
-                    "恢复默认分级（66 / 88 / 110 / 132 · 冰蓝→红）",
-                    onClick = { dashboard.setSpeedBands(SpeedBands()) },
-                    modifier = Modifier.fillMaxWidth(),
-                    tone = Tone.Warn,
-                )
             }
-        }
 
-        PersonalInfoSection(container)
-
-        CollapsibleSection(
-            "本机钥匙与缓存",
-            "指纹尾 …" + publicKey.takeLast(4) + " · P-256",
-        ) {
-        Panel(
-            title = "车钥匙公钥",
-            subtitle = "私钥由 AndroidKeyStore 加密后仅存本机，不上传任何服务器",
-            trailing = {
-                Pill("P-256", Tone.Neutral)
-            },
-        ) {
-            Text(publicKey, style = TL.mono, color = TL.textMid)
-            HintBar(
-                "只有当「调试」页出现“本机钥匙无法解密”时才需要重新生成：这会替换本机钥匙，之后必须重新" +
-                    "刷卡配对，并在车机「控制→钥匙」删除旧条目。日常更新 app / 重启不会换钥匙。",
-                Tone.Neutral,
-            )
             ActionTile(
-                "重新生成本机钥匙",
-                onClick = {
-                    scope.launch {
-                        try {
-                            link.rotateKey()
-                            rotateNote = Tone.Good to
-                                "已生成新钥匙：请在本页上方「钥匙配对」重新配对，并在车机钥匙列表删除旧条目"
-                        } catch (e: Exception) {
-                            rotateNote = Tone.Bad to (e.message ?: "重新生成失败")
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                tone = Tone.Bad,
-            )
-            rotateNote?.let { HintBar(it.second, it.first) }
-        }
-
-        Panel(
-            title = "协议会话缓存",
-            subtitle = "缓存握手结果以加速首条命令。持续报签名/计数器错误时清除重建。",
-        ) {
-            KeyValue("清除后", "下次连接重新握手")
-            ActionTile(
-                "清除会话缓存",
-                onClick = {
-                    scope.launch {
-                        container.sessionCache.clear()
-                        cacheNote = Tone.Good to "已清除，下次连接将重新握手"
-                    }
-                },
+                "恢复默认分级（66 / 88 / 110 / 132 · 冰蓝→红）",
+                onClick = { dashboard.setSpeedBands(SpeedBands()) },
                 modifier = Modifier.fillMaxWidth(),
                 tone = Tone.Warn,
             )
-            cacheNote?.let { HintBar(it.second, it.first) }
-        }
         }
 
+        SectionLabel("本机数据", "只在取证 PDF 用到")
+
+        PersonalInfoSection(container)
+
+        SectionLabel("修复与高级", "都只动本机")
+
         CollapsibleSection(
-            "关于与开发者",
-            "v0.0.4 · 开发者模式" + if (devMode) "开" else "关",
+            "本机钥匙与会话缓存",
+            "指纹尾 …" + publicKey.takeLast(4) + " · P-256",
         ) {
-        Panel(
-            title = "开发者模式",
-            subtitle = "打开后底栏显示「调试」页（链路自检、分级日志）。日常使用无需打开。",
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (devMode) "已开启：底栏显示调试页" else "已关闭",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TL.textMid,
-                    modifier = Modifier.weight(1f),
+            SettingItem(
+                "车钥匙公钥",
+                "私钥由 AndroidKeyStore 加密后只存本机，不上传任何服务器。",
+                trailing = { Pill("P-256", Tone.Neutral) },
+            ) {
+                Text(publicKey, style = TL.mono, color = TL.textMid)
+                HintBar(
+                    "只有当「调试」页出现“本机钥匙无法解密”时才需要重新生成：这会替换本机钥匙，之后必须重新" +
+                        "刷卡配对，并在车机「控制→钥匙」删除旧条目。日常更新 app / 重启不会换钥匙。",
+                    Tone.Neutral,
                 )
-                Switch(checked = devMode, onCheckedChange = { link.setDevMode(it) })
+                ActionTile(
+                    "重新生成本机钥匙",
+                    onClick = {
+                        scope.launch {
+                            try {
+                                link.rotateKey()
+                                rotateNote = Tone.Good to
+                                    "已生成新钥匙：请在上方「连接与配对」重新配对，并在车机钥匙列表删除旧条目"
+                            } catch (e: Exception) {
+                                rotateNote = Tone.Bad to (e.message ?: "重新生成失败")
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    tone = Tone.Bad,
+                )
+                rotateNote?.let { HintBar(it.second, it.first) }
+            }
+
+            ItemRule()
+
+            SettingItem(
+                "协议会话缓存",
+                "缓存握手结果以加速首条命令；持续报签名/计数器错误时清除重建。",
+            ) {
+                KeyValue("清除后", "下次连接重新握手")
+                ActionTile(
+                    "清除会话缓存",
+                    onClick = {
+                        scope.launch {
+                            container.sessionCache.clear()
+                            cacheNote = Tone.Good to "已清除，下次连接将重新握手"
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    tone = Tone.Warn,
+                )
+                cacheNote?.let { HintBar(it.second, it.first) }
             }
         }
 
-        SectionLabel("关于")
+        CollapsibleSection(
+            "引导与开发者模式",
+            "开发者模式" + if (devMode) "已开启" else "已关闭",
+        ) {
+            SettingItem(
+                "重看首次引导",
+                "只重置界面引导状态：不动本机钥匙，也不会通知车辆；首次引导卡与配对卡会恢复显示。",
+            ) {
+                ActionTile(
+                    "重看首次引导",
+                    onClick = {
+                        link.resetOnboarding()
+                        resetNote = Tone.Good to "已重置：本机钥匙没动，也没通知车辆"
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    tone = Tone.Warn,
+                )
+                resetNote?.let { HintBar(it.second, it.first) }
+            }
+
+            ItemRule()
+
+            SettingItem(
+                "开发者模式",
+                "打开后底栏多一页「调试」：链路自检与分级日志。日常使用不需要。",
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (devMode) "已开启：底栏显示调试页" else "已关闭",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TL.textMid,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(checked = devMode, onCheckedChange = { link.setDevMode(it) })
+                }
+            }
+        }
+
+        SectionLabel("关于", "T-Dash v0.0.5")
         Panel(tight = true) {
-            KeyValue("版本", "T-Dash v0.0.4")
+            KeyValue("版本", "T-Dash v0.0.5")
             KeyValue("项目性质", "非官方开源项目，与 Tesla, Inc. 无隶属关系，也不接入任何官方账号体系")
             KeyValue("担保", "按「原样」提供，不提供任何担保；仅供你本人拥有或有权操作的车辆使用")
             KeyValue("通道", "蓝牙直连（官方 Vehicle Command 协议的 Kotlin 实现）")
             KeyValue("云端", "无：无账号登录、无遥测服务器；联网只用于地图底图、定位解析，以及可选的高德天气")
             KeyValue("本机数据", "私钥、轨迹、取证照片与个人信息只存本机")
             KeyValue("远程", "人不在车旁时需要 Fleet API，当前版本未启用")
-        }
         }
     }
 }
@@ -700,6 +713,60 @@ private fun fieldColors() = androidx.compose.material3.OutlinedTextFieldDefaults
 )
 
 /**
+ * 折叠区里的一条设置：只有标题 + 说明 + 控件，自己不画框。
+ * CollapsibleSection 已经给了描边和标题，里面再套 Panel 就是"框里有框、两个标题"——
+ * 设置页原先的乱主要来自这里。条目之间用 ItemRule 分隔。
+ */
+@Composable
+private fun SettingItem(
+    title: String,
+    subtitle: String? = null,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TL.textHi,
+                )
+                subtitle?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TL.textLow,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+            trailing?.invoke(this)
+        }
+        content()
+    }
+}
+
+/** 条目之间的细分隔线：代替"每条一个卡片"。 */
+@Composable
+private fun ItemRule() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(TL.hairline)
+    )
+}
+
+/**
  * 「连接车辆」操作区：链路排查提示 + VIN/扫描连接 + 钥匙配对。
  * 首次与待配对阶段直接展开；日常模式由调用方收进折叠区。
  */
@@ -724,7 +791,7 @@ private fun ConnectionControls(link: com.teslalink.app.vm.LinkViewModel) {
             )
         }
 
-        Panel(title = "VIN", subtitle = "17 位，见车辆铭牌或行驶证") {
+        SettingItem("VIN 与链路", "17 位，见车辆铭牌或行驶证；平时打开 app 自动连接，这里用于首次配置与手动补救。") {
             OutlinedTextField(
                 value = vin,
                 onValueChange = link::setVin,
@@ -762,9 +829,10 @@ private fun ConnectionControls(link: com.teslalink.app.vm.LinkViewModel) {
         }
 
         if (!keyPaired) {
-            Panel(
-                title = "把本机公钥加入车辆钥匙链",
-                subtitle = "请求发出后车辆会要求刷卡并在屏幕确认",
+            ItemRule()
+            SettingItem(
+                "把本机公钥加入车辆钥匙链",
+                "请求发出后，车辆会要求刷 NFC 钥匙卡并在屏幕上确认；完成后打开 app 直接进仪表页。",
             ) {
                 Step("01", "点「发送配对请求」")
                 Step("02", "把 NFC 钥匙卡贴在中控读取区（杯架前方的卡槽）")
@@ -869,9 +937,9 @@ private fun PersonalInfoSection(container: AppContainer) {
         "个人信息（事故取证用）",
         (if (stored.summary.isBlank()) "未填写" else stored.summary) + " · 证件照 $photoCount/2",
     ) {
-        Panel(
-            title = "报案信息",
-            subtitle = "只被「工具 → 事故处理 → 导出取证清单 PDF」读取，也用来核对现场要念给交警/保险的号码。" +
+        SettingItem(
+            "报案信息",
+            "只被「工具 → 事故处理 → 导出取证清单 PDF」读取，也用来核对现场要念给交警/保险的号码。" +
                 "全部存本机（应用私有存储），不联网、不上传。",
         ) {
             ProfileField("姓名", form.name, "张三") { draft = form.copy(name = it) }
@@ -943,9 +1011,11 @@ private fun PersonalInfoSection(container: AppContainer) {
             textNote?.let { HintBar(it.second, it.first) }
         }
 
-        Panel(
-            title = "证件照片",
-            subtitle = "驾驶证、行驶证各一张，导出 PDF 时排在「证件照片」栏，现场不用再翻相册。",
+        ItemRule()
+
+        SettingItem(
+            "证件照片",
+            "驾驶证、行驶证各一张，导出 PDF 时排在「证件照片」栏，现场不用再翻相册。",
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 IdPhotoSlot(

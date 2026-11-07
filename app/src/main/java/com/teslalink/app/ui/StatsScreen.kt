@@ -537,7 +537,7 @@ private fun tripMarkerIcon(res: android.content.res.Resources, core: Int): Bitma
     return BitmapDrawable(res, bmp)
 }
 
-/** 轨迹按速度着色（与仪表速度分档同口径：0/66/88/110/132）。 */
+/** 轨迹按速度着色（与「设置 → 仪表显示 → 速度分档与配色」同口径：0/66/88/110/132）。 */
 private fun tripColor(kmh: Float): Color = when {
     kmh < 66f -> Color(0xFF38BDF8)
     kmh < 88f -> Color(0xFFE8EAED)

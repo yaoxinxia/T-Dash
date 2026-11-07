@@ -40,6 +40,7 @@ import com.teslalink.app.vehicle.VehicleConnection
 import com.teslalink.app.vm.LinkViewModel
 import com.teslalink.app.vm.StatusSnapshot
 import com.teslalink.app.vm.StatusViewModel
+import kotlin.math.roundToInt
 
 /**
  * 控制页：按钮可用性由连接与安全闸门驱动。
@@ -247,7 +248,13 @@ fun ControlScreen(vm: LinkViewModel, status: StatusViewModel) {
         }
         }
 
-        CollapsibleSection("灯光与车窗", "车机 · " + if (mcuReady) "就绪" else "未就绪") {
+        CollapsibleSection(
+            "灯光与车窗",
+            closureSummary(
+                snap,
+                "车机 · " + if (mcuReady) "就绪" else "未就绪",
+            ),
+        ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Tile("闪灯", gate(needMcu = true), vm::flash, Modifier.weight(1f), badge = "车机")
                 Tile("鸣笛", gate(needMcu = true), vm::honk, Modifier.weight(1f), badge = "车机")
@@ -267,6 +274,13 @@ fun ControlScreen(vm: LinkViewModel, status: StatusViewModel) {
                     Modifier.weight(1f),
                     badge = "车机",
                 )
+            }
+            // 天窗开度与逐门逐窗状态：车机一直在报，之前只画了"四窗/两箱"的汇总胶囊。
+            val closureRows = closureLiveRows(snap)
+            if (closureRows.isNotEmpty()) {
+                Panel(title = "开闭件明细", subtitle = "只读；车机没报的不列，行驶中这一组通常不报。") {
+                    closureRows.forEach { KeyValue(it.label, it.value, tone = it.tone) }
+                }
             }
         }
 
@@ -348,6 +362,14 @@ fun ControlScreen(vm: LinkViewModel, status: StatusViewModel) {
             }
 
             ClimateExtras(vm, snap, mcuReady, blocked)
+
+            // 能读不能控的细项：协议里没有设风量/后排档位的指令，所以这里只如实报状态，不给假按钮。
+            val cabinRows = cabinLiveRows(snap)
+            if (cabinRows.isNotEmpty()) {
+                Panel(title = "其余座舱状态", subtitle = "只读回读；车机没报的不列。") {
+                    cabinRows.forEach { KeyValue(it.label, it.value, tone = it.tone) }
+                }
+            }
         }
 
         CollapsibleSection("充电", chargeSummary(charging, snap?.chargeLimit)) {
@@ -433,6 +455,14 @@ fun ControlScreen(vm: LinkViewModel, status: StatusViewModel) {
                     badge = "车机",
                 )
             }
+
+            // 充电与续航实况：全是车机一直在报、我们之前没解析的字段（纯函数挑出"真报了"的行）。
+            val liveRows = chargeLiveRows(snap)
+            if (liveRows.isNotEmpty()) {
+                Panel(title = "充电与续航实况", subtitle = "只读；车机没报的行不占位置。") {
+                    liveRows.forEach { KeyValue(it.label, it.value, tone = it.tone) }
+                }
+            }
         }
 
         CollapsibleSection(
@@ -516,7 +546,7 @@ fun ControlScreen(vm: LinkViewModel, status: StatusViewModel) {
                     )
                     if (p != null && p.address == null) {
                         HintBar(
-                            "地址解析不出来多半是没配高德 Key：「设置 → 高德 Key（通用）」填一把「Web服务」平台的 Key 再点重新解析。" +
+                            "地址解析不出来多半是没配高德 Key：「设置 → 地图与天气」填一把「Web服务」平台的 Key 再点重新解析。" +
                                 "OSM 在国内一般连不上，不能指望。",
                             Tone.Warn,
                         )
@@ -542,6 +572,8 @@ fun ControlScreen(vm: LinkViewModel, status: StatusViewModel) {
                 }
                 KeyValue("朝向", snap?.heading?.toString() ?: "未知")
                 KeyValue("整车", snap?.sleepStatus ?: "未知")
+                // 车机自己存的「家/公司」：将来做通勤场景与地理围栏就以此为基准点（口径同位置：车机 WGS-84）。
+                savedPlaceRows(snap).forEach { KeyValue(it.label, it.value, tone = it.tone) }
                 KeyValue(
                     "更新",
                     snap?.updatedAtMs?.takeIf { it > 0 }?.let {
@@ -737,6 +769,188 @@ private fun climateSummary(on: Boolean?, driver: Float?, inside: Float?, auto: B
 
 private fun chargeSummary(state: String?, limit: Int?): String =
     (state ?: "状态未知") + (limit?.let { " · 上限 $it%" } ?: "")
+
+/** 一行只读明细（车机报了才生成，界面按列表长度决定画不画这块卡）。 */
+internal data class ReadRow(val label: String, val value: String, val tone: Tone = Tone.Neutral)
+
+/** 剩余分钟数：负数是车机的"没在算"，不报。 */
+internal fun minutesText(min: Int?): String? = min?.takeIf { it >= 0 }?.let {
+    if (it < 60) "$it 分" else "${it / 60} 时 ${"%02d".format(it % 60)} 分"
+}
+
+/** 车机时刻表用的是"当日第几分钟"，转 HH:mm。 */
+internal fun minuteOfDayText(min: Int?): String? = min?.takeIf { it in 0..1_439 }?.let {
+    "%02d:%02d".format(it / 60, it % 60)
+}
+
+/** epoch 秒 → HH:mm（谷电结束这类车机给的绝对时刻）。 */
+internal fun epochSecText(sec: Long): String =
+    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(sec * 1000L))
+
+/** 座椅加热/通风档位数字 → 人话（0=关，1/2/3=低/中/高；超出量程原样报，别瞎猜）。 */
+internal fun seatLevelText(level: Int?): String? = level?.let {
+    when (it) {
+        0 -> "关"
+        1 -> "低"
+        2 -> "中"
+        3 -> "高"
+        else -> "$it 档"
+    }
+}
+
+/**
+ * 充电与续航实况。判据全在这一个纯函数里：车机没报（null）或报了没意义（0/负）就不生成行，
+ * 界面因此不会出现半截真话夹一行 "--" 的脏样子。
+ */
+internal fun chargeLiveRows(s: StatusSnapshot?): List<ReadRow> {
+    if (s == null) return emptyList()
+    val rows = mutableListOf<ReadRow>()
+    val ideal = s.rangeIdealKm ?: s.rangeRatedKm
+    if (ideal != null && ideal > 0f) {
+        rows += ReadRow(
+            "续航",
+            "${ideal.roundToInt()} km" + (s.rangeRatedKm?.let { "（额定 ${it.roundToInt()}）" } ?: "")
+        )
+    }
+    minutesText(s.minutesToFullCharge)?.let { rows += ReadRow("充满还需", it) }
+    minutesText(s.minutesToChargeLimit)?.let { rows += ReadRow("充到限值还需", it) }
+    val feed = listOfNotNull(
+        s.chargerVoltage?.let { "${it.roundToInt()}V" },
+        s.chargerActualAmps?.let { "实际 ${it}A" },
+        s.chargerPilotAmps?.let { "引导 ${it}A" },
+        s.chargerPhases?.takeIf { it > 0 }?.let { if (it == 1) "单相" else "$it 相" },
+    )
+    if (feed.isNotEmpty()) rows += ReadRow("桩在给电", feed.joinToString(" · "))
+    s.energyAddedKwh?.takeIf { it > 0.05f }?.let {
+        rows += ReadRow(
+            "本次已充",
+            "%.1f kWh".format(it) + (s.addedRangeKm?.let { a -> " · +${a.roundToInt()} km" } ?: "")
+        )
+    }
+    s.offPeakEndsAtSec?.takeIf { it > 0 }?.let { rows += ReadRow("谷电结束", epochSecText(it)) }
+    s.scheduledChargingMode?.let { mode ->
+        if (mode == "未设定时") {
+            rows += ReadRow("车机定时", mode)
+        } else {
+            val text = listOfNotNull(
+                mode,
+                minuteOfDayText(s.scheduledChargeAtMinute)?.let { "从 $it" },
+                minuteOfDayText(s.scheduledDepartAtMinute)?.let { "出发 $it" },
+                s.preconditionOnDeparture?.let { if (it) "预设座舱" else "不预设" },
+            ).joinToString(" · ")
+            if (text.isNotBlank()) rows += ReadRow("车机定时", text)
+        }
+    }
+    when {
+        s.batteryHeater == true -> rows += ReadRow("电池预热", "进行中", Tone.Good)
+        s.batteryHeaterNoPower == true -> rows += ReadRow("电池预热", "想预热但桩功率不够", Tone.Warn)
+    }
+    when {
+        s.chargePortColdWeather == true -> rows += ReadRow("充电口", "冷天模式", Tone.Info)
+        s.cableUnlatched == true -> rows += ReadRow("充电线缆", "已解扣，可拔枪")
+    }
+    // V2L 对外放电：国内车型多半整族不报，报了才显示。
+    val v2l = listOfNotNull(
+        s.powershareStatus,
+        s.powershareEnabled?.let { if (it) "已开启" else "未开启" },
+        s.powershareLoadKw?.takeIf { it > 0.05f }?.let { "负载 %.1f kW".format(it) },
+        s.outletSocLimit?.let { "限到 $it%" },
+    )
+    if (v2l.isNotEmpty()) rows += ReadRow("对外放电 V2L", v2l.joinToString(" · "))
+    return rows
+}
+
+/** 折叠态就把"有东西开着"说出来：没异常时退回原来的车机就绪摘要。 */
+internal fun closureSummary(s: StatusSnapshot?, fallback: String): String {
+    val open = closureLiveRows(s).filter { it.tone == Tone.Warn }.map { it.value }
+    return if (open.isEmpty()) fallback else open.joinToString(" · ")
+}
+
+/** 座舱里那些"能读不能控"的细项：后排/三排加热、后视镜与雨刮加热、预设、COP、除霜。 */
+internal fun cabinLiveRows(s: StatusSnapshot?): List<ReadRow> {
+    if (s == null) return emptyList()
+    val rows = mutableListOf<ReadRow>()
+    val rear = listOfNotNull(
+        seatLevelText(s.seatHeatRearLeft)?.let { "左 $it" },
+        seatLevelText(s.seatHeatRearCenter)?.let { "中 $it" },
+        seatLevelText(s.seatHeatRearRight)?.let { "右 $it" },
+    )
+    if (rear.isNotEmpty()) rows += ReadRow("后排加热", rear.joinToString(" · "))
+    val third = listOfNotNull(
+        seatLevelText(s.seatHeatThirdLeft)?.let { "左 $it" },
+        seatLevelText(s.seatHeatThirdRight)?.let { "右 $it" },
+    )
+    if (third.isNotEmpty()) rows += ReadRow("三排加热", third.joinToString(" · "))
+    s.mirrorHeater?.let { rows += ReadRow("后视镜加热", if (it) "工作中" else "关", if (it) Tone.Good else Tone.Neutral) }
+    s.wiperBladeHeater?.let {
+        rows += ReadRow("雨刮加热", if (it) "工作中" else "关", if (it) Tone.Good else Tone.Neutral)
+    }
+    s.preconditioningActive?.let {
+        rows += ReadRow("座舱预设", if (it) "按时刻表预设中" else "未预设", if (it) Tone.Data else Tone.Neutral)
+    }
+    if (s.frontDefrosterOn == true || s.rearDefrosterOn == true) {
+        rows += ReadRow(
+            "除霜",
+            listOfNotNull(
+                s.frontDefrosterOn?.let { on -> if (on) "前" else null },
+                s.rearDefrosterOn?.let { on -> if (on) "后" else null },
+            ).joinToString(" · ").ifEmpty { "开" },
+            Tone.Warn,
+        )
+    }
+    s.autoSteeringHeat?.let {
+        rows += ReadRow("方向盘加热", (if (it) "自动" else "手动") + (seatLevelText(s.steeringHeatLevel)?.let { " · $it" } ?: ""))
+    }
+    s.copAllowed?.let { allowed ->
+        rows += ReadRow(
+            "离车高温保护",
+            when {
+                !allowed -> "未允许"
+                s.copCooling == true -> "${s.copState ?: "开"} · 正在主动降温"
+                else -> s.copState ?: "开"
+            },
+            if (s.copCooling == true) Tone.Data else Tone.Neutral,
+        )
+    }
+    return rows
+}
+
+/** 开闭件明细：天窗开度 + 四门四窗逐位 + 远程启动/代客。行驶中门/窗状态车机不报，就不画。 */
+internal fun closureLiveRows(s: StatusSnapshot?): List<ReadRow> {
+    if (s == null) return emptyList()
+    val rows = mutableListOf<ReadRow>()
+    s.sunRoofPercent?.takeIf { it > 0 }?.let { rows += ReadRow("天窗", "开 $it%", Tone.Warn) }
+    val doors = listOfNotNull(
+        s.doorDriverFront?.let { if (it) "驾驶位" else null },
+        s.doorDriverRear?.let { if (it) "左后" else null },
+        s.doorPassengerFront?.let { if (it) "副驾" else null },
+        s.doorPassengerRear?.let { if (it) "右后" else null },
+    )
+    if (doors.isNotEmpty()) rows += ReadRow("门开着", doors.joinToString(" · "), Tone.Warn)
+    val windows = listOfNotNull(
+        s.windowDriverFront?.let { if (it) "驾驶位" else null },
+        s.windowDriverRear?.let { if (it) "左后" else null },
+        s.windowPassengerFront?.let { if (it) "副驾" else null },
+        s.windowPassengerRear?.let { if (it) "右后" else null },
+    )
+    if (windows.isNotEmpty()) rows += ReadRow("窗开着", windows.joinToString(" · "), Tone.Warn)
+    if (s.remoteStart == true) rows += ReadRow("远程启动", "已启动，未踩刹车", Tone.Warn)
+    if (s.valetMode == true) rows += ReadRow("代客模式", "开启中", Tone.Warn)
+    return rows
+}
+
+/** 车机里存的家/公司坐标（通勤与地理围栏的免费基准点）。 */
+internal fun savedPlaceRows(s: StatusSnapshot?): List<ReadRow> {
+    if (s == null) return emptyList()
+    val rows = mutableListOf<ReadRow>()
+    s.homeLat?.let { lat ->
+        s.homeLon?.let { lon -> rows += ReadRow("车机的「家」", "%.5f, %.5f".format(lat, lon)) }
+    }
+    s.workLat?.let { lat ->
+        s.workLon?.let { lon -> rows += ReadRow("车机的「公司」", "%.5f, %.5f".format(lat, lon)) }
+    }
+    return rows
+}
 
 private fun sentrySummary(on: Boolean?, fresh: Boolean): String = when {
     on == null -> "哨兵状态未知"

@@ -54,11 +54,19 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
     val publicKeyHex = MutableStateFlow("…")
 
     // ↓↓↓ 必须声明在 init 之前：viewModelScope 用 Main.immediate，init 里启动的收集器
-    // 会在属性初始化完成前同步执行，读到未初始化属性就是打开即闪退。 ↓↓↓
+    // 会在属性初始化完成前同步执行，读到未初始化属性就是打开即闪退；
+    // 可空属性更不会崩（写进去就行），但会被后面的属性初始化器静默覆盖——同样算 bug。 ↓↓↓
     private var reconnectJob: Job? = null
     private var connectJob: Job? = null
     private var pairingJob: Job? = null
     private val manualDisconnect = MutableStateFlow(false)
+
+    /**
+     * 最近一次"承认过"的完整 VIN（17 位）。换车清理的判据不能拿当前输入框内容比——
+     * 逐字编辑（删到 16 位再补齐）时中间态会把 17 位基准冲掉，新 VIN 永远触发不了清理，
+     * 旧车的 MAC/引导状态就带到新车上了。
+     */
+    private var lastCommittedFullVin: String? = null
 
     /** True while the app is trying to bring the link back on its own. */
     val autoReconnecting = MutableStateFlow(false)
@@ -214,13 +222,6 @@ class LinkViewModel(private val c: AppContainer) : ViewModel() {
     /** VINs are alphanumeric; anything else is a paste artifact that would break name hash + AAD. */
     private fun sanitizeVin(raw: String): String =
         raw.uppercase().filter { it in 'A'..'Z' || it in '0'..'9' }
-
-    /**
-     * 最近一次"承认过"的完整 VIN（17 位）。换车清理的判据不能拿当前输入框内容比——
-     * 逐字编辑（删到 16 位再补齐）时中间态会把 17 位基准冲掉，新 VIN 永远触发不了清理，
-     * 旧车的 MAC/引导状态就带到新车上了。
-     */
-    private var lastCommittedFullVin: String? = null
 
     fun setVin(value: String) {
         val cleaned = sanitizeVin(value)

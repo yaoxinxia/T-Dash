@@ -27,7 +27,7 @@ data class WeatherNow(
  * 高德天气：手机定位 → 逆地理拿城市 → 天气实况。
  *
  * 天气变化慢，调用方按需 30 分钟刷一次即可，这里不做任何自主轮询。
- * Key 复用设置里的「高德 Key（通用）」；没 Key、没定位权限、任何一步失败都只记日志并返回 null——
+ * Key 复用设置里的「高德 Key 与仪表天气」；没 Key、没定位权限、任何一步失败都只记日志并返回 null——
  * 仪表宁可不显示，也不放一个 "--" 占位。
  */
 class WeatherService(private val context: Context, private val prefs: PrefsStore) {
@@ -129,7 +129,7 @@ class WeatherService(private val context: Context, private val prefs: PrefsStore
     }
 
     private fun getJson(url: String): JSONObject? = runCatching {
-        http.newCall(Request.Builder().url(url).header("User-Agent", "T-Dash/0.0.4").build())
+        http.newCall(Request.Builder().url(url).header("User-Agent", "T-Dash/0.0.5").build())
             .execute().use { resp ->
                 val body = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful || body.isBlank()) {

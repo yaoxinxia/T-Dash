@@ -63,6 +63,88 @@ data class StatusSnapshot(
     val driveShiftAtMs: Long? = null,
     /** 哨兵字段自己的时钟：CLOSURES 不是每轮都轮到，没有它旧值会被别的类"续命"成假新鲜。 */
     val sentryAtMs: Long? = null,
+
+    // ---- 以下全是"车机已经在答、我们之前没解析"的字段（2026-11-01 挖出来的 A 类）--------
+    // 统一原则：字段级 null = 这一轮没给，合并时保留旧值；UI 遇到 null 就隐藏该行，不放占位符。
+
+    /** 额定/理想/标准三种续航（车机同时给三个口径，国内常用 ideal 显示在车机屏上）。km */
+    val rangeRatedKm: Float? = null,
+    val rangeIdealKm: Float? = null,
+    val rangeEstKm: Float? = null,
+    /** 充满 / 充到当前限值的剩余分钟数。 */
+    val minutesToFullCharge: Int? = null,
+    val minutesToChargeLimit: Int? = null,
+    /** 桩实际给了多少：电压 V、实际电流 A、引导（pilot）电流 A、相数。家充排障就看这三个是否自洽。 */
+    val chargerVoltage: Float? = null,
+    val chargerActualAmps: Int? = null,
+    val chargerPilotAmps: Int? = null,
+    val chargerPhases: Int? = null,
+    /** 本次充电已充进的电量 kWh 与增加的额定里程 km。 */
+    val energyAddedKwh: Float? = null,
+    val addedRangeKm: Float? = null,
+    /** 谷电结束时间（车机报的是 epoch 秒，可能为 0=没设）。 */
+    val offPeakEndsAtSec: Long? = null,
+    /** 车端定时充电/出发：模式 Off/StartAt/DepartBy，两个"当日分钟数"，以及出发前是否预设座舱。 */
+    val scheduledChargingMode: String? = null,
+    val scheduledChargeAtMinute: Int? = null,
+    val scheduledDepartAtMinute: Int? = null,
+    val preconditionOnDeparture: Boolean? = null,
+    /** 电池预热（超级充电前）与"想预热但没电"。 */
+    val batteryHeater: Boolean? = null,
+    val batteryHeaterNoPower: Boolean? = null,
+    val chargePortColdWeather: Boolean? = null,
+    /** 充电线是否已解扣（锁车后能不能拔枪）。 */
+    val cableUnlatched: Boolean? = null,
+
+    /** 后排/三排座椅加热档位（车没装就不出现）。 */
+    val seatHeatRearLeft: Int? = null,
+    val seatHeatRearRight: Int? = null,
+    val seatHeatRearCenter: Int? = null,
+    val seatHeatThirdLeft: Int? = null,
+    val seatHeatThirdRight: Int? = null,
+    val mirrorHeater: Boolean? = null,
+    val wiperBladeHeater: Boolean? = null,
+    /** 座舱预设中（车机在按时刻表提前升温/降温）。之前被错当成 MAX 除霜用了。 */
+    val preconditioningActive: Boolean? = null,
+    val autoSeatClimateLeft: Boolean? = null,
+    val autoSeatClimateRight: Boolean? = null,
+    val autoSteeringHeat: Boolean? = null,
+    val steeringHeatLevel: Int? = null,
+    /** 除霜真实字段：前/后除霜器开关（MAX 除霜是动作，回读只有这两个）。 */
+    val frontDefrosterOn: Boolean? = null,
+    val rearDefrosterOn: Boolean? = null,
+    /** 离车高温保护（COP）：允许 / 车机报的状态名 / 正在主动制冷。 */
+    val copAllowed: Boolean? = null,
+    val copState: String? = null,
+    val copCooling: Boolean? = null,
+
+    /** V2L 对外放电。国内车型多半整族不报——报了才显示，没报就一行都不留。 */
+    val powershareAllowed: Boolean? = null,
+    val powershareEnabled: Boolean? = null,
+    val powershareStatus: String? = null,
+    val powershareLoadKw: Float? = null,
+    val outletSocLimit: Int? = null,
+
+    /** 天窗开度百分比（没装天窗时字段不出现）。 */
+    val sunRoofPercent: Int? = null,
+    /** 四门四窗逐位状态。 */
+    val doorDriverFront: Boolean? = null,
+    val doorDriverRear: Boolean? = null,
+    val doorPassengerFront: Boolean? = null,
+    val doorPassengerRear: Boolean? = null,
+    val windowDriverFront: Boolean? = null,
+    val windowDriverRear: Boolean? = null,
+    val windowPassengerFront: Boolean? = null,
+    val windowPassengerRear: Boolean? = null,
+    /** 远程启动过（还没踩刹车熄火前为真）与代客模式。 */
+    val remoteStart: Boolean? = null,
+    val valetMode: Boolean? = null,
+
+    /** 车机里存的家 / 公司坐标（GCJ-02 口径同 location_state），通勤场景的免费基准点。 */
+    val homeLat: Float? = null,
+    val homeLon: Float? = null,
+    val workLat: Float? = null,
+    val workLon: Float? = null,
 ) {
     fun shiftIsMoving(): Boolean = shiftState == "R" || shiftState == "N" || shiftState == "D"
 
@@ -593,11 +675,70 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
             } else null
             snap = snap.copy(
                 batteryLevel = if (charge.hasBatteryLevel()) charge.batteryLevel else null,
-                batteryRangeKm = if (charge.hasBatteryRange()) charge.batteryRange * 1.609f else null,
+                batteryRangeKm = if (charge.hasBatteryRange()) charge.batteryRange * MILES_TO_KM else null,
                 chargeLimit = if (charge.hasChargeLimitSoc()) charge.chargeLimitSoc else null,
                 chargingState = chargingStateName,
                 chargePowerKw = if (charge.hasChargerPower()) charge.chargerPower else null,
                 chargePortOpen = if (charge.hasChargePortDoorOpen()) charge.chargePortDoorOpen else null,
+                // ↓ 同一帧里一直有、我们一直没解析的字段。里程类车机报英里，统一转 km。
+                rangeRatedKm = opt(charge.hasBatteryRange()) { charge.batteryRange * MILES_TO_KM },
+                rangeIdealKm = opt(charge.hasIdealBatteryRange()) { charge.idealBatteryRange * MILES_TO_KM },
+                rangeEstKm = opt(charge.hasEstBatteryRange()) { charge.estBatteryRange * MILES_TO_KM },
+                minutesToFullCharge = opt(charge.hasMinutesToFullCharge()) { charge.minutesToFullCharge },
+                minutesToChargeLimit = opt(charge.hasMinutesToChargeLimit()) { charge.minutesToChargeLimit },
+                chargerVoltage = opt(charge.hasChargerVoltage()) { charge.chargerVoltage.toFloat() },
+                chargerActualAmps = opt(charge.hasChargerActualCurrent()) { charge.chargerActualCurrent },
+                chargerPilotAmps = opt(charge.hasChargerPilotCurrent()) { charge.chargerPilotCurrent },
+                chargerPhases = opt(charge.hasChargerPhases()) { charge.chargerPhases },
+                energyAddedKwh = opt(charge.hasChargeEnergyAdded()) { charge.chargeEnergyAdded },
+                addedRangeKm = opt(charge.hasChargeMilesAddedIdeal()) {
+                    charge.chargeMilesAddedIdeal * MILES_TO_KM
+                },
+                offPeakEndsAtSec = opt(charge.hasOffPeakHoursEndTime()) {
+                    charge.offPeakHoursEndTime.toLong()
+                },
+                scheduledChargingMode = opt(charge.hasScheduledChargingMode()) {
+                    when (charge.scheduledChargingMode) {
+                        Vehicle.ChargeState.ScheduledChargingMode.ScheduledChargingModeStartAt -> "定时充电：从"
+                        Vehicle.ChargeState.ScheduledChargingMode.ScheduledChargingModeDepartBy -> "定时充电：出发前"
+                        else -> "未设定时"
+                    }
+                },
+                scheduledChargeAtMinute = opt(charge.hasScheduledChargingStartTimeMinutes()) {
+                    charge.scheduledChargingStartTimeMinutes.toInt()
+                },
+                scheduledDepartAtMinute = opt(charge.hasScheduledDepartureTimeMinutes()) {
+                    charge.scheduledDepartureTimeMinutes.toInt()
+                },
+                preconditionOnDeparture = opt(charge.hasPreconditioningEnabled()) {
+                    charge.preconditioningEnabled
+                },
+                chargePortColdWeather = opt(charge.hasChargePortColdWeatherMode()) {
+                    charge.chargePortColdWeatherMode
+                },
+                cableUnlatched = opt(charge.hasChargeCableUnlatched()) { charge.chargeCableUnlatched },
+                homeLat = opt(charge.hasHomeLocation()) { charge.homeLocation.latitude },
+                homeLon = opt(charge.hasHomeLocation()) { charge.homeLocation.longitude },
+                workLat = opt(charge.hasWorkLocation()) { charge.workLocation.latitude },
+                workLon = opt(charge.hasWorkLocation()) { charge.workLocation.longitude },
+                powershareAllowed = opt(charge.hasPowershareFeatureAllowed()) {
+                    charge.powershareFeatureAllowed
+                },
+                powershareEnabled = opt(charge.hasPowershareFeatureEnabled()) {
+                    charge.powershareFeatureEnabled
+                },
+                powershareStatus = opt(charge.hasPowershareStatus()) {
+                    when (charge.powershareStatus) {
+                        Vehicle.ChargeState.PowershareStatus.PowershareStatusActive -> "放电中"
+                        Vehicle.ChargeState.PowershareStatus.PowershareStatusInit -> "正在建立"
+                        Vehicle.ChargeState.PowershareStatus.PowershareStatusHandshaking -> "握手"
+                        else -> "未放电"
+                    }
+                },
+                powershareLoadKw = opt(charge.hasPowershareInstantaneousLoadKw()) {
+                    charge.powershareInstantaneousLoadKw
+                },
+                outletSocLimit = opt(charge.hasOutletSocLimit()) { charge.outletSocLimit },
             )
         }
         if (data.hasClimateState()) {
@@ -618,9 +759,53 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
                 seatCoolLeft = if (climate.hasSeatFanFrontLeft()) climate.seatFanFrontLeft else null,
                 seatCoolRight = if (climate.hasSeatFanFrontRight()) climate.seatFanFrontRight else null,
                 swHeater = if (climate.hasSteeringWheelHeater()) climate.steeringWheelHeater else null,
-                maxDefrost = if (climate.hasIsPreconditioning()) climate.isPreconditioning else null,
+                // MAX 除霜的回读一直错用了 is_preconditioning（那是"座舱预设中"，跟除霜无关），
+                // 所以按下 MAX 除霜后这颗灯永远不亮。除霜的真值是前/后除霜器两个 bool。
+                frontDefrosterOn = opt(climate.hasIsFrontDefrosterOn()) { climate.isFrontDefrosterOn },
+                rearDefrosterOn = opt(climate.hasIsRearDefrosterOn()) { climate.isRearDefrosterOn },
+                maxDefrost = opt(
+                    climate.hasIsFrontDefrosterOn() || climate.hasIsRearDefrosterOn()
+                ) {
+                    (if (climate.hasIsFrontDefrosterOn()) climate.isFrontDefrosterOn else false) ||
+                        (if (climate.hasIsRearDefrosterOn()) climate.isRearDefrosterOn else false)
+                },
+                preconditioningActive = opt(climate.hasIsPreconditioning()) { climate.isPreconditioning },
                 keeper = keeperName(climate),
                 bioweaponOn = if (climate.hasBioweaponModeOn()) climate.bioweaponModeOn else null,
+                seatHeatRearLeft = opt(climate.hasSeatHeaterRearLeft()) { climate.seatHeaterRearLeft },
+                seatHeatRearRight = opt(climate.hasSeatHeaterRearRight()) { climate.seatHeaterRearRight },
+                seatHeatRearCenter = opt(climate.hasSeatHeaterRearCenter()) { climate.seatHeaterRearCenter },
+                seatHeatThirdLeft = opt(climate.hasSeatHeaterThirdRowLeft()) {
+                    climate.seatHeaterThirdRowLeft
+                },
+                seatHeatThirdRight = opt(climate.hasSeatHeaterThirdRowRight()) {
+                    climate.seatHeaterThirdRowRight
+                },
+                mirrorHeater = opt(climate.hasSideMirrorHeaters()) { climate.sideMirrorHeaters },
+                wiperBladeHeater = opt(climate.hasWiperBladeHeater()) { climate.wiperBladeHeater },
+                batteryHeater = opt(climate.hasBatteryHeater()) { climate.batteryHeater },
+                batteryHeaterNoPower = opt(climate.hasBatteryHeaterNoPower()) {
+                    climate.batteryHeaterNoPower
+                },
+                autoSeatClimateLeft = opt(climate.hasAutoSeatClimateLeft()) { climate.autoSeatClimateLeft },
+                autoSeatClimateRight = opt(climate.hasAutoSeatClimateRight()) {
+                    climate.autoSeatClimateRight
+                },
+                autoSteeringHeat = opt(climate.hasAutoSteeringWheelHeat()) {
+                    climate.autoSteeringWheelHeat
+                },
+                steeringHeatLevel = opt(climate.hasSteeringWheelHeatLevel()) {
+                    climate.steeringWheelHeatLevel.number
+                },
+                copAllowed = opt(climate.hasAllowCabinOverheatProtection()) {
+                    climate.allowCabinOverheatProtection
+                },
+                copState = opt(climate.hasCabinOverheatProtection()) {
+                    climate.cabinOverheatProtection.name
+                },
+                copCooling = opt(climate.hasCabinOverheatProtectionActivelyCooling()) {
+                    climate.cabinOverheatProtectionActivelyCooling
+                },
             )
         }
         snap = applyStatusDrive(snap, data, now)
@@ -643,6 +828,22 @@ class StatusViewModel(private val c: AppContainer) : ViewModel() {
                 }
                 if (sentry != null) snap = snap.copy(sentryOn = sentry, sentryAtMs = now)
             }
+            val cl = data.closuresState
+            snap = snap.copy(
+                sunRoofPercent = opt(cl.hasSunRoofPercentOpen()) { cl.sunRoofPercentOpen },
+                doorDriverFront = opt(cl.hasDoorOpenDriverFront()) { cl.doorOpenDriverFront },
+                doorDriverRear = opt(cl.hasDoorOpenDriverRear()) { cl.doorOpenDriverRear },
+                doorPassengerFront = opt(cl.hasDoorOpenPassengerFront()) { cl.doorOpenPassengerFront },
+                doorPassengerRear = opt(cl.hasDoorOpenPassengerRear()) { cl.doorOpenPassengerRear },
+                windowDriverFront = opt(cl.hasWindowOpenDriverFront()) { cl.windowOpenDriverFront },
+                windowDriverRear = opt(cl.hasWindowOpenDriverRear()) { cl.windowOpenDriverRear },
+                windowPassengerFront = opt(cl.hasWindowOpenPassengerFront()) {
+                    cl.windowOpenPassengerFront
+                },
+                windowPassengerRear = opt(cl.hasWindowOpenPassengerRear()) { cl.windowOpenPassengerRear },
+                remoteStart = opt(cl.hasRemoteStart()) { cl.remoteStart },
+                valetMode = opt(cl.hasValetMode()) { cl.valetMode },
+            )
         }
         if (data.hasLocationState()) {
             val loc = data.locationState
@@ -697,5 +898,68 @@ internal fun StatusSnapshot.mergedInto(base: StatusSnapshot): StatusSnapshot = c
     bioweaponOn = bioweaponOn ?: base.bioweaponOn,
     sentryOn = sentryOn ?: base.sentryOn,
     sentryAtMs = sentryAtMs ?: base.sentryAtMs,
+    rangeRatedKm = rangeRatedKm ?: base.rangeRatedKm,
+    rangeIdealKm = rangeIdealKm ?: base.rangeIdealKm,
+    rangeEstKm = rangeEstKm ?: base.rangeEstKm,
+    minutesToFullCharge = minutesToFullCharge ?: base.minutesToFullCharge,
+    minutesToChargeLimit = minutesToChargeLimit ?: base.minutesToChargeLimit,
+    chargerVoltage = chargerVoltage ?: base.chargerVoltage,
+    chargerActualAmps = chargerActualAmps ?: base.chargerActualAmps,
+    chargerPilotAmps = chargerPilotAmps ?: base.chargerPilotAmps,
+    chargerPhases = chargerPhases ?: base.chargerPhases,
+    energyAddedKwh = energyAddedKwh ?: base.energyAddedKwh,
+    addedRangeKm = addedRangeKm ?: base.addedRangeKm,
+    offPeakEndsAtSec = offPeakEndsAtSec ?: base.offPeakEndsAtSec,
+    scheduledChargingMode = scheduledChargingMode ?: base.scheduledChargingMode,
+    scheduledChargeAtMinute = scheduledChargeAtMinute ?: base.scheduledChargeAtMinute,
+    scheduledDepartAtMinute = scheduledDepartAtMinute ?: base.scheduledDepartAtMinute,
+    preconditionOnDeparture = preconditionOnDeparture ?: base.preconditionOnDeparture,
+    batteryHeater = batteryHeater ?: base.batteryHeater,
+    batteryHeaterNoPower = batteryHeaterNoPower ?: base.batteryHeaterNoPower,
+    chargePortColdWeather = chargePortColdWeather ?: base.chargePortColdWeather,
+    cableUnlatched = cableUnlatched ?: base.cableUnlatched,
+    seatHeatRearLeft = seatHeatRearLeft ?: base.seatHeatRearLeft,
+    seatHeatRearRight = seatHeatRearRight ?: base.seatHeatRearRight,
+    seatHeatRearCenter = seatHeatRearCenter ?: base.seatHeatRearCenter,
+    seatHeatThirdLeft = seatHeatThirdLeft ?: base.seatHeatThirdLeft,
+    seatHeatThirdRight = seatHeatThirdRight ?: base.seatHeatThirdRight,
+    mirrorHeater = mirrorHeater ?: base.mirrorHeater,
+    wiperBladeHeater = wiperBladeHeater ?: base.wiperBladeHeater,
+    preconditioningActive = preconditioningActive ?: base.preconditioningActive,
+    autoSeatClimateLeft = autoSeatClimateLeft ?: base.autoSeatClimateLeft,
+    autoSeatClimateRight = autoSeatClimateRight ?: base.autoSeatClimateRight,
+    autoSteeringHeat = autoSteeringHeat ?: base.autoSteeringHeat,
+    steeringHeatLevel = steeringHeatLevel ?: base.steeringHeatLevel,
+    frontDefrosterOn = frontDefrosterOn ?: base.frontDefrosterOn,
+    rearDefrosterOn = rearDefrosterOn ?: base.rearDefrosterOn,
+    copAllowed = copAllowed ?: base.copAllowed,
+    copState = copState ?: base.copState,
+    copCooling = copCooling ?: base.copCooling,
+    powershareAllowed = powershareAllowed ?: base.powershareAllowed,
+    powershareEnabled = powershareEnabled ?: base.powershareEnabled,
+    powershareStatus = powershareStatus ?: base.powershareStatus,
+    powershareLoadKw = powershareLoadKw ?: base.powershareLoadKw,
+    outletSocLimit = outletSocLimit ?: base.outletSocLimit,
+    sunRoofPercent = sunRoofPercent ?: base.sunRoofPercent,
+    doorDriverFront = doorDriverFront ?: base.doorDriverFront,
+    doorDriverRear = doorDriverRear ?: base.doorDriverRear,
+    doorPassengerFront = doorPassengerFront ?: base.doorPassengerFront,
+    doorPassengerRear = doorPassengerRear ?: base.doorPassengerRear,
+    windowDriverFront = windowDriverFront ?: base.windowDriverFront,
+    windowDriverRear = windowDriverRear ?: base.windowDriverRear,
+    windowPassengerFront = windowPassengerFront ?: base.windowPassengerFront,
+    windowPassengerRear = windowPassengerRear ?: base.windowPassengerRear,
+    remoteStart = remoteStart ?: base.remoteStart,
+    valetMode = valetMode ?: base.valetMode,
+    homeLat = homeLat ?: base.homeLat,
+    homeLon = homeLon ?: base.homeLon,
+    workLat = workLat ?: base.workLat,
+    workLon = workLon ?: base.workLon,
     mcuUpdatedAtMs = maxOf(mcuUpdatedAtMs, base.mcuUpdatedAtMs),
 )
+
+/** 车机这一轮给了才取值；没给返回 null，合并时保留上一轮的值。 */
+private inline fun <T> opt(present: Boolean, value: () -> T): T? = if (present) value() else null
+
+/** 车机里程类字段一律英里（速度、续航、充电增加里程），界面统一显示 km。 */
+private const val MILES_TO_KM = 1.609344f

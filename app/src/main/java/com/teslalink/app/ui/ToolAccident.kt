@@ -599,7 +599,7 @@ fun AccidentSection(container: AppContainer) {
 
         if (amapKey.isNullOrBlank()) {
             HintBar(
-                "想要中文地址：到「设置 → 高德 Key（通用）」填一次 Web服务 Key 即可（不需要安全密钥）。",
+                "想要中文地址：到「设置 → 地图与天气」填一次 Web服务 Key 即可（不需要安全密钥）。",
                 Tone.Neutral,
             )
         }

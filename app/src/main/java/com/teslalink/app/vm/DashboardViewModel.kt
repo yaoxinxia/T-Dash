@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tesla.generated.carserver.vehicle.Vehicle
 import com.teslalink.app.AppContainer
+import com.teslalink.app.audio.FULL_POWER_KW
+import com.teslalink.app.audio.engineLevelFor
 import com.teslalink.app.debug.DebugLog
 import com.teslalink.app.vehicle.Payloads
 import com.teslalink.app.vehicle.VehicleConnection
@@ -18,6 +20,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.PI
+import kotlin.math.sin
 
 private const val WEATHER_REFRESH_MS = 30 * 60_000L
 private const val WEATHER_RETRY_MS = 10 * 60_000L
@@ -86,6 +90,12 @@ internal fun applyDashboardDrive(
     if (data == null || !data.hasDriveState()) return previous
     val drive = data.driveState
     val sample = parseDriveSample(data)
+    val nav = parseNav(drive, now)
+    // 车机退出导航：这一帧里目的地和剩余时间都没了——路线字段被车机整组撤走。
+    // 撤走本身就是"不再导航"的证据，但留 1.5 秒宽限（行驶中 250ms 一帧 ≈ 6 帧连续缺席）
+    // 防止偶发丢字段；超过宽限就判定导航结束，把整组值连同时钟一起清掉。
+    // 不这么做的话导航条会挂着上一个目的地，只能等 25 秒兜底窗口过期才消失。
+    val navGone = !nav.navigating && navEnded(previous.navAtMs, now)
     return previous.copy(
         speedKmh = sample.speedKmh ?: previous.speedKmh,
         shift = sample.shift ?: previous.shift,
@@ -98,8 +108,81 @@ internal fun applyDashboardDrive(
         } else previous.odometerHm,
         // The cluster's stale indicator represents speed, not an unrelated power/shift update.
         updatedAtMs = if (sample.speedKmh != null) now else previous.updatedAtMs,
+        // 导航行程：值可以带着旧值走，但时钟只有这一帧真给了才续（见 parseNav）；
+        // 判定导航结束时整组清空，不能让旧目的地挂在仪表上。
+        navDestination = if (navGone) null else (nav.destination ?: previous.navDestination),
+        navMinutes = if (navGone) null else (nav.minutes ?: previous.navMinutes),
+        navKmLeft = if (navGone) null else (nav.kmLeft ?: previous.navKmLeft),
+        navDelayMin = if (navGone) null else (nav.delayMin ?: previous.navDelayMin),
+        navArrivalSoc = if (navGone) null else (nav.arrivalSoc ?: previous.navArrivalSoc),
+        navAtMs = if (navGone) null else (nav.atMs ?: previous.navAtMs),
     )
 }
+
+/**
+ * 车机导航的实时行程。这些字段本来就在 DRIVE 帧里，车速道 250ms 一次已经在拿了。
+ *
+ * 判据保守：**只有目的地或剩余时间二者之一真出现**，才算"车在导航"并给这一组盖时间戳。
+ * 导航结束/取消后车机会把整组字段撤掉——撤掉本身也是证据，但要留一帧抖动的余量：
+ * 连续缺席超过 [NAV_END_GRACE_MS] 才判定导航结束（见 [navEnded]），界面整条立刻撤下，
+ * 而不是把最后一个目的地挂在仪表上等 25 秒兜底窗口过期。
+ */
+internal data class NavInfo(
+    val destination: String? = null,
+    val minutes: Float? = null,
+    val kmLeft: Float? = null,
+    val delayMin: Float? = null,
+    val arrivalSoc: Int? = null,
+    val atMs: Long? = null,
+    /** 这一帧有没有"还在导航"的硬证据（目的地或剩余时间）。 */
+    val navigating: Boolean = false,
+)
+
+internal fun parseNav(drive: Vehicle.DriveState, now: Long): NavInfo {
+    val dest = if (drive.hasActiveRouteDestination()) {
+        drive.activeRouteDestination.trim().ifEmpty { null }
+    } else {
+        null
+    }
+    val minutes = if (drive.hasActiveRouteMinutesToArrival()) {
+        drive.activeRouteMinutesToArrival.takeIf { it.isFinite() }
+    } else {
+        null
+    }
+    val kmLeft = if (drive.hasActiveRouteMilesToArrival()) {
+        (drive.activeRouteMilesToArrival * 1.609344f).takeIf { it.isFinite() }
+    } else {
+        null
+    }
+    // 拥堵延时为 0 是"没额外堵车"，不是"字段缺席"——只有非有限值才丢。
+    val delay = if (drive.hasActiveRouteTrafficMinutesDelay()) {
+        drive.activeRouteTrafficMinutesDelay.takeIf { it.isFinite() }
+    } else {
+        null
+    }
+    val arrivalSoc = if (drive.hasActiveRouteEnergyAtArrival()) {
+        drive.activeRouteEnergyAtArrival.takeIf { it.isFinite() }?.toInt()?.coerceIn(0, 100)
+    } else {
+        null
+    }
+    val real = dest != null || minutes != null
+    return NavInfo(dest, minutes, kmLeft, delay, arrivalSoc, if (real) now else null, real)
+}
+
+/** 导航条的兜底有效期：车机在导航时几秒就重算一次，25 秒没新证据就当它已经不在导航了。 */
+internal const val NAV_STALE_MS = 25_000L
+
+/**
+ * 车机撤掉路线字段后的宽限期。行驶中 DRIVE 帧约 250ms 一帧，1.5 秒 ≈ 连续 6 帧没有路线字段，
+ * 才认定"车机真的退出了导航"，这样单帧丢字段不会把导航条闪掉。
+ */
+internal const val NAV_END_GRACE_MS = 1_500L
+
+/** 距离上一次导航证据已经超过宽限期 = 导航结束。 */
+internal fun navEnded(lastNavAtMs: Long?, now: Long): Boolean =
+    lastNavAtMs != null && now - lastNavAtMs >= NAV_END_GRACE_MS
+
+internal fun navIsFresh(atMs: Long?, now: Long): Boolean = readingIsFresh(atMs, now, NAV_STALE_MS)
 
 /**
  * 车速道节奏。行驶：跟着真实往返走（下限 250ms，一次 250ms 的读排在别人的响应后面会直接翻倍）。
@@ -168,6 +251,23 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
         val chargePowerKw: Int? = null,
         val charging: Boolean = false,
         val updatedAtMs: Long = 0,
+
+        /**
+         * 车机导航的实时行程（DriveState 里一直有，之前没解析）。**不额外发任何请求**——
+         * 车速道 250ms 一次本来就在读 DRIVE。没在导航时这些字段整组缺席，界面就一行都不画。
+         */
+        val navDestination: String? = null,
+        /** 剩余时间 / 剩余里程（km）/ 拥堵多花的时间（分钟）。 */
+        val navMinutes: Float? = null,
+        val navKmLeft: Float? = null,
+        val navDelayMin: Float? = null,
+        /** 到达时预计剩余电量百分比。 */
+        val navArrivalSoc: Int? = null,
+        /** 字段级时钟：收到才算数。导航结束后不再更新，界面按它自动消失（宁缺不占位）。 */
+        val navAtMs: Long? = null,
+
+        /** 驻车「电量」卡的副行用：车机报的续航（ideal 优先，退 rated），km。 */
+        val rangeKm: Float? = null,
     )
 
     val cluster = MutableStateFlow(ClusterState())
@@ -354,30 +454,9 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
             c.connection.keyPaired.value &&
             !c.connection.exclusive.value
 
-    init {
-        viewModelScope.launch {
-            speedBands.value = SpeedBands.decode(c.prefs.getString("speed_bands"))
-        }
-        // 用户停下 250ms 才落盘：连发时每个值都写一次会把 DataStore 打满，而丢掉中间值没影响。
-        viewModelScope.launch {
-            speedBands.drop(1).collectLatest { bands ->
-                delay(250)
-                c.prefs.putString("speed_bands", bands.encode())
-            }
-        }
-        // A dropped link must not leave the last speed/SOC on screen: the cluster would keep
-        // showing values from a car we are no longer talking to, and "行驶中" would stick.
-        viewModelScope.launch {
-            c.connection.state.collect { state ->
-                if (state == VehicleConnection.State.DISCONNECTED) {
-                    cluster.value = ClusterState()
-                    driveReadings = DriveReadings()
-                    pendingAccelSocResult = null
-                    c.vehicleMoving.value = false
-                }
-            }
-        }
-    }
+    // 这个类的 init 放在文件末尾：viewModelScope 是 Dispatchers.Main.immediate，DataStore
+    // 加载完之后 getString 不再挂起，所以 launch 体会在构造函数里**同步跑完**——引用到
+    // 之后才声明的属性就是 null（2026-10-31 启动闪退：engineSoundOn 在 652 行声明）。
 
     private var driveReadings = DriveReadings()
     @Volatile private var driveReadInFlight = false
@@ -521,6 +600,12 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
                     recordSeries(powerSeries, Point(now, data.driveState.power.toFloat()), now)
                 }
                 publishSeries(now)
+                // 声浪就挂在这条已经在跑的车速流上：功率是这一帧刚读回来的，不额外发请求。
+                updateEngineSound(
+                    sample.shift ?: driveReadings.shift,
+                    if (data?.hasDriveState() == true && data.driveState.hasPower()) data.driveState.power else null,
+                    now,
+                )
             }
             // Pace from tick start: a ~200 ms round trip inside a 250 ms cadence must not turn
             // the speedometer into a 2 Hz one.
@@ -580,6 +665,15 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
             if (charge.hasChargerPower()) {
                 s = s.copy(chargePowerKw = charge.chargerPower)
             }
+            // 续航口径：车机屏上国内常用 ideal（理想续航），没有就退 rated。
+            val rangeMiles = when {
+                charge.hasIdealBatteryRange() -> charge.idealBatteryRange
+                charge.hasBatteryRange() -> charge.batteryRange
+                else -> null
+            }
+            if (rangeMiles != null && rangeMiles.isFinite() && rangeMiles > 0f) {
+                s = s.copy(rangeKm = rangeMiles * 1.609344f)
+            }
             s.copy(
                 charging = (charge.hasChargingState() &&
                     charge.chargingState.typeCase ==
@@ -630,6 +724,85 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
         weatherJob?.cancel()
         weatherJob = null
         weather.value = null
+    }
+
+    // ---- 玩具：模拟引擎声浪（工具页开关，默认关） ------------------------------------
+
+    /** 关掉时仪表盘一个像素都不挪：角标是浮层，声音线程也不启动。 */
+    val engineSoundOn = MutableStateFlow(false)
+
+    /** 当前声浪强度 0..1，仪表角标的抖动就读它。 */
+    val engineLevel = MutableStateFlow(0f)
+
+    private val engineSound = com.teslalink.app.audio.EngineSound()
+    private var previewJob: Job? = null
+
+    fun setEngineSound(on: Boolean) {
+        if (engineSoundOn.value == on) return
+        engineSoundOn.value = on
+        viewModelScope.launch { c.prefs.putString("engine_sound_on", if (on) "1" else "0") }
+        if (on) engineSound.start() else {
+            previewJob?.cancel()
+            engineSound.stop()
+            engineLevel.value = 0f
+        }
+    }
+
+    /**
+     * 声浪唯一的输入就是车速道已经在拿的实时功率：不额外发任何蓝牙请求。
+     * 只在 D/R、且 app 在前台时出声——人在车里听个响是乐趣，装在口袋里突然轰鸣是惊吓。
+     */
+    private fun updateEngineSound(shift: String?, powerKw: Int?, now: Long) {
+        if (!engineSoundOn.value) return
+        if (previewJob?.isActive == true) return // 试听期间由试听脚本自己驱动
+        val engaged = shift == "D" || shift == "R"
+        val level = if (engaged && c.appInForeground.value) {
+            engineLevelFor((powerKw ?: 0).toFloat())
+        } else {
+            0f
+        }
+        engineSound.setLevel(level)
+        // 抖动量跟着 250–500ms 的数据节奏走就够了，别在 UI 层再插一个高频定时器。
+        if (kotlin.math.abs(level - engineLevel.value) > 0.02f || (level == 0f && engineLevel.value != 0f)) {
+            engineLevel.value = level
+        }
+    }
+
+    /** 工具页「试听」：不动车，按同一条映射曲线扫一遍功率，让他先听到会是什么效果。 */
+    fun previewEngineSound(durationMs: Long = 4_000) {
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch {
+            engineSound.start()
+            val started = System.currentTimeMillis()
+            while (isActive) {
+                val t = (System.currentTimeMillis() - started).toFloat() / durationMs
+                if (t >= 1f) break
+                // 0→1→0 的半波：踩下去再松开，正好是他在车里会听到的那一圈。
+                val sweep = sin(t * PI.toFloat()).let { if (it.isFinite() && it > 0f) it else 0f }
+                val level = engineLevelFor(sweep * FULL_POWER_KW)
+                engineSound.setLevel(level)
+                engineLevel.value = level
+                delay(60)
+            }
+            engineSound.setLevel(0f)
+            engineLevel.value = 0f
+            if (!engineSoundOn.value) engineSound.stop()
+        }
+    }
+
+    fun stopEnginePreview() {
+        previewJob?.cancel()
+        previewJob = null
+        if (!engineSoundOn.value) {
+            engineSound.stop()
+            engineLevel.value = 0f
+        }
+    }
+
+    override fun onCleared() {
+        previewJob?.cancel()
+        engineSound.stop()
+        super.onCleared()
     }
 
     @Volatile private var lastTripGpsMs = 0L
@@ -803,5 +976,40 @@ class DashboardViewModel(private val c: AppContainer) : ViewModel() {
         powerSeries.clear()
         speed.value = emptyList()
         power.value = emptyList()
+    }
+
+    /**
+     * 启动期的读取与常驻 collector。放在**全部属性之后**是有原因的：viewModelScope 用
+     * `Dispatchers.Main.immediate`，而 DataStore 加载完成后 `getString` 不再挂起，于是这些
+     * launch 体会在构造函数里同步跑完；init 写在前面时后声明的属性还没赋值（NPE / 赋值被
+     * 属性初始化器覆盖）。新增属性一律不要往 init 上面塞依赖。
+     */
+    init {
+        viewModelScope.launch {
+            speedBands.value = SpeedBands.decode(c.prefs.getString("speed_bands"))
+        }
+        viewModelScope.launch {
+            engineSoundOn.value = c.prefs.getString("engine_sound_on") == "1"
+            if (engineSoundOn.value) engineSound.start()
+        }
+        // 用户停下 250ms 才落盘：连发时每个值都写一次会把 DataStore 打满，而丢掉中间值没影响。
+        viewModelScope.launch {
+            speedBands.drop(1).collectLatest { bands ->
+                delay(250)
+                c.prefs.putString("speed_bands", bands.encode())
+            }
+        }
+        // A dropped link must not leave the last speed/SOC on screen: the cluster would keep
+        // showing values from a car we are no longer talking to, and "行驶中" would stick.
+        viewModelScope.launch {
+            c.connection.state.collect { state ->
+                if (state == VehicleConnection.State.DISCONNECTED) {
+                    cluster.value = ClusterState()
+                    driveReadings = DriveReadings()
+                    pendingAccelSocResult = null
+                    c.vehicleMoving.value = false
+                }
+            }
+        }
     }
 }

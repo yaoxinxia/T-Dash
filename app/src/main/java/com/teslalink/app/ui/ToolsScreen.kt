@@ -37,6 +37,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.material3.Switch
+import androidx.compose.foundation.shape.RoundedCornerShape
+import kotlin.math.PI
+import kotlin.math.sin
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -86,12 +90,12 @@ fun ToolsScreen(container: AppContainer, dashboard: com.teslalink.app.vm.Dashboa
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        PageHeader("工具", "小工具合集：快捷启动 · 事故处理 · 行车记录仪 · 零百计时 · 车机皮肤")
+        PageHeader("工具", "小工具合集：快捷启动 · 事故处理 · 行车记录仪 · 零百计时 · 车机皮肤 · 引擎声浪")
         Row(
             Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            listOf("快捷启动", "事故处理", "行车记录仪", "零百计时", "车机皮肤").forEachIndexed { i, name ->
+            listOf("快捷启动", "事故处理", "行车记录仪", "零百计时", "车机皮肤", "引擎声浪").forEachIndexed { i, name ->
                 Pill(
                     name,
                     if (i == tool) Tone.Data else Tone.Neutral,
@@ -105,7 +109,102 @@ fun ToolsScreen(container: AppContainer, dashboard: com.teslalink.app.vm.Dashboa
             1 -> AccidentSection(container)
             2 -> DashcamTool(container, dashboard)
             3 -> AccelToolSection(dashboard)
-            else -> WrapsSection(container)
+            4 -> WrapsSection(container)
+            else -> EngineSoundSection(dashboard)
+        }
+    }
+}
+
+/**
+ * 玩具：模拟引擎声浪。开关 + 试用动画 + 试听。
+ * 声浪是 AudioTrack 现场合成的（不带音频素材），唯一输入就是车速道已经在拿的实时功率——
+ * 不会因为开了这个玩具多发一条蓝牙请求。
+ */
+@Composable
+private fun EngineSoundSection(dashboard: DashboardViewModel) {
+    val on by dashboard.engineSoundOn.collectAsState()
+    val liveLevel by dashboard.engineLevel.collectAsState()
+    // 试用动画自己扫一遍功率曲线（0 → 满 → 0），不连车也能看到抖动、听到声浪。
+    var demoT by remember { mutableStateOf(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            demoT = (System.currentTimeMillis() % 4_200L) / 4_200f
+            delay(60)
+        }
+    }
+    val demoLevel = com.teslalink.app.audio.engineLevelFor(
+        sin(demoT * PI.toFloat()).coerceAtLeast(0f) * com.teslalink.app.audio.FULL_POWER_KW,
+    )
+    val level = if (on && liveLevel > 0.02f) liveLevel else demoLevel
+    val kw = (level * com.teslalink.app.audio.FULL_POWER_KW).toInt()
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionLabel("引擎声浪", "玩具 · 纯代码合成，不占包体也不发额外请求")
+        Panel {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EngineToyBadge(level, Modifier.size(46.dp))
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text("声浪开关", style = MaterialTheme.typography.titleSmall, color = TL.textHi)
+                    Text(
+                        "打开后仪表盘左上角出现发动机标：功率越大声音越强、标抖得越凶。" +
+                            "关掉时仪表布局一个像素都不动。",
+                        fontSize = 12.sp,
+                        color = TL.textLow,
+                        modifier = Modifier.padding(top = 3.dp),
+                    )
+                }
+                Switch(checked = on, onCheckedChange = { dashboard.setEngineSound(it) })
+            }
+            Column(Modifier.padding(top = 14.dp)) {
+                Text(
+                    if (on && liveLevel > 0.02f) "下面跟着的是车此刻的功率" else "试用动画：按同一条曲线自己扫功率",
+                    fontSize = 11.sp,
+                    color = TL.textLow,
+                )
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .background(TL.hairlineSoft, RoundedCornerShape(4.dp)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(level.coerceAtLeast(0.02f))
+                            .height(8.dp)
+                            .background(if (level > 0.05f) TL.warn else TL.hairline, RoundedCornerShape(4.dp)),
+                    )
+                }
+                Text(
+                    "模拟功率 $kw kW · 强度 ${(level * 100).toInt()}%",
+                    style = TL.mono.copy(fontSize = 11.sp, color = TL.textMid),
+                    modifier = Modifier.padding(top = 5.dp),
+                )
+            }
+            Row(
+                Modifier.padding(top = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ActionTile(
+                    "试听 4 秒",
+                    onClick = { dashboard.previewEngineSound(4_200) },
+                    modifier = Modifier.weight(1f),
+                    emphasize = true,
+                    tone = Tone.Info,
+                    stateLine = "按上面同一条曲线放一遍",
+                )
+                ActionTile(
+                    if (on) "关闭声浪" else "开启声浪",
+                    onClick = { dashboard.setEngineSound(!on) },
+                    modifier = Modifier.weight(1f),
+                    tone = if (on) Tone.Warn else Tone.Good,
+                    stateLine = if (on) "开着 · 挂 D/R 踩油门就有" else "关着 · 仪表不挂角标",
+                )
+            }
+            HintBar(
+                "音量走手机媒体音量（先把侧键音量给上去）；只在 D/R 且 app 在前台时出声——" +
+                    "揣口袋或息屏时不会突然轰鸣。电车没有怠速，所以松开油门就是彻底安静，不做假底噪。",
+                Tone.Info,
+            )
         }
     }
 }
